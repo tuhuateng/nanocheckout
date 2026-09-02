@@ -1,8 +1,10 @@
 # Nano Checkout
 
+**日本語** | [简体中文](README.zh-CN.md) | [English](README.en.md)
+
 小さなストア向けの、プラットフォーム非依存なチェックアウト実装です。フロントエンドは React + Vite、API は Hono、データベースは Postgres、決済は Stripe Checkout を使用します。
 
-Web、iOS、Android、LINE LIFF 向けのリクエスト例を含む完全な仕様は [API 接口文档](docs/API.md) を参照してください。
+Web、iOS、Android、LINE LIFF 向けのリクエスト例を含む完全な仕様は [API ドキュメント](docs/API.md)（中国語）を参照してください。
 
 ## ローカルで起動
 
@@ -15,9 +17,7 @@ npm run dev
 
 `http://localhost:5173` を開いてください。環境変数を設定しない場合はメモリ DB とデモ決済で起動するため、UI と注文フローをすぐ確認できます。
 
-商品名、価格、送料、販売条件は `src/config/order-spec.ts` の一箇所で変更できます。
-
-商品管理を使う場合、商品データは Postgres の `checkout_products` が正本になります。初期商品はマイグレーションで自動作成されます。
+商品データは Postgres の `checkout_products` テーブルが正本で、管理画面から編集します。初期商品はマイグレーションで自動作成されます。`src/config/order-spec.ts` にはストア名、販売条件ページの文言、DB 未接続時のフォールバック商品を定義します。
 
 ## 本番環境変数
 
@@ -28,11 +28,11 @@ npm run dev
 - `CHECKOUT_PII_KEY` — `openssl rand -base64 32` で一度だけ生成。変更すると既存 PII を復号できません。
 - `CHECKOUT_LOOKUP_PEPPER` — `openssl rand -hex 32` で生成。
 - `ADMIN_PASSWORD_HASH` — `npm run admin:hash -- "十分に長いパスワード"` の出力を設定。
-- `ADMIN_SESSION_SECRET` — `openssl rand -hex 32` で生成。
+- `ADMIN_SESSION_SECRET` — `openssl rand -hex 32` で生成（32 文字以上）。
 - `APP_URL` — 例: `https://shop.example.com`
 - `DATABASE_URL` — Cloudflare Hyperdrive を使う場合は不要。
 
-テーブルは `migrations/0000_checkout_orders.sql` を SQL エディタで実行するか、`DIRECT_URL` を指定して `npm run db:push` で作成します。
+テーブルは `migrations/` 内の SQL を番号順（`0000_checkout_orders.sql` → `0001_checkout_products.sql`）に SQL エディタで実行するか、`DIRECT_URL` を指定して `npm run db:push` で作成します。
 
 ## Cloudflare Pages + Hyperdrive（推奨）
 
@@ -54,30 +54,32 @@ npm run dev
 
 `public/_routes.json` は Worker を `/api/*` に限定します。`/confirm/` は `OrderSpec` からビルド時に生成され、静的アセットとして配信されるため Worker の呼び出しを消費しません。
 
-## 商户管理后台
+> Supabase Free は非アクティブなプロジェクトを一時停止することがあります。実際に注文を受けるストアでは有料プラン、Neon、または監視を含む自前 Postgres を利用してください。
 
-`/admin/` 提供订单管理界面，包括销售额与订单统计、支付状态筛选、订单搜索，以及解密后的购买者和配送信息。管理会话存放在签名、`HttpOnly`、`SameSite=Strict` Cookie 中，密码只以 PBKDF2 哈希形式配置。
+## 管理画面
 
-本地未设置 `ADMIN_PASSWORD_HASH` 时会启用演示后台，地址为 `http://localhost:5173/admin/`，密码为 `nano-demo-2026`。生产适配器不会启用此默认密码；缺少管理员环境变量时会直接拒绝启动。
+`/admin/` で注文管理を行います。売上と注文数の集計、支払いステータスによる絞り込み、注文検索、復号された購入者情報と配送先を確認できます。管理セッションは署名付きの `HttpOnly`、`SameSite=Strict` Cookie に保存され、パスワードは PBKDF2 ハッシュとしてのみ設定します。
 
-### 产品管理
+ローカルで `ADMIN_PASSWORD_HASH` を設定していない場合はデモ管理画面が有効になり、`http://localhost:5173/admin/` にパスワード `nano-demo-2026` でログインできます。本番アダプターではこの既定パスワードは有効にならず、管理者用の環境変数が不足していると起動を拒否します。
 
-后台的「商品管理」支持：
+### 商品管理
 
-- 新建与编辑商品
-- SKU、名称、版本、说明、价格和运费
-- 有限库存或不限库存
-- 草稿、销售中、归档状态
-- 一键上下架和前台预览
+管理画面の「商品管理」では次を行えます。
 
-公开客户端可以调用：
+- 商品の新規作成と編集
+- SKU、商品名、エディション、説明、価格、送料の設定
+- 有限在庫または在庫無制限
+- 下書き、販売中、アーカイブの各ステータス
+- ワンクリックでの公開・非公開切り替えとストアフロントのプレビュー
+
+公開クライアントは次を呼び出せます。
 
 ```http
 GET /api/storefront/products
 GET /api/storefront/products/:sku
 ```
 
-Web 可通过 `/?product=SKU` 预览指定商品；iOS、Android 和 LINE 也使用相同 SKU 创建订单：
+Web では `/?product=SKU` で指定商品をプレビューできます。iOS、Android、LINE も同じ SKU で注文を作成します。
 
 ```json
 {
@@ -95,9 +97,7 @@ Web 可通过 `/?product=SKU` 预览指定商品；iOS、Android 和 LINE 也使
 }
 ```
 
-服务端根据 SKU 查询价格并预留库存，不采用客户端提交的金额。Stripe Session 创建失败或过期时会自动归还库存。
-
-> Supabase Free は非アクティブなプロジェクトを一時停止することがあります。実際に注文を受けるストアでは有料プラン、Neon、または監視を含む自前 Postgres を利用してください。
+サーバーは SKU から価格を取得して在庫を確保し、クライアントが送る金額は使用しません。Stripe Session の作成に失敗した場合や期限切れの場合は在庫を自動で戻します。
 
 ## Vercel / Netlify
 
@@ -110,7 +110,7 @@ Vercel Hobby は商用利用向けではないため、販売用途では契約�
 
 ## セキュリティ境界
 
-- 商品価格と送料はサーバーの `OrderSpec` から計算し、ブラウザが送る金額は信用しません。
+- 商品価格と送料はサーバー側のデータから計算し、ブラウザが送る金額は信用しません。
 - 購入者情報は AES-256-GCM で暗号化して保存します。検索用メール値は HMAC-SHA256 で不可逆化します。
 - Stripe webhook は Web Crypto で署名と 5 分の時刻許容範囲を検証します。
 - 注文作成は idempotency key で二重実行を防ぎます。
