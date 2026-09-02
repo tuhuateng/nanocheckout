@@ -17,7 +17,9 @@ npm run dev
 
 Open `http://localhost:5173`. With no environment variables set, the app starts with an in-memory database and demo payments, so you can try the UI and order flow right away.
 
-Product data lives in the Postgres table `checkout_products` and is edited from the admin panel. The initial product is seeded by the migrations. `src/config/order-spec.ts` holds the store name, the sales terms page copy, and a fallback product used when no database is connected.
+Product data lives in the Postgres table `checkout_products` and is edited from the admin panel. The initial product is seeded by the migrations. When no product is published, the storefront shows an unavailable state and the order endpoint returns `409`.
+
+`src/config/order-spec.ts` holds the store name and the content of the legal terms page required by the Japanese Act on Specified Commercial Transactions. **The seller name, the person in charge, the address and the phone number are placeholders. Replace them with the real details of the selling business before going live.**
 
 ## Production environment variables
 
@@ -32,7 +34,7 @@ See `.env.example` and register the following as secrets on your platform. Never
 - `APP_URL` — e.g. `https://shop.example.com`
 - `DATABASE_URL` — not needed when using Cloudflare Hyperdrive.
 
-Create the tables either by running the SQL files in `migrations/` in numeric order (`0000_checkout_orders.sql` → `0001_checkout_products.sql`) in a SQL editor, or by setting `DIRECT_URL` and running `npm run db:push`.
+Create the tables either by running the SQL files in `migrations/` in numeric order (`0000_checkout_orders.sql` → `0001_checkout_products.sql` → `0002_order_fulfillment.sql`) in a SQL editor, or by setting `DIRECT_URL` and running `npm run db:push`.
 
 ## Cloudflare Pages + Hyperdrive (recommended)
 
@@ -58,9 +60,19 @@ Create the tables either by running the SQL files in `migrations/` in numeric or
 
 ## Admin panel
 
-`/admin/` provides order management: revenue and order counts, filtering by payment status, order search, and decrypted buyer and shipping details. The admin session is stored in a signed `HttpOnly`, `SameSite=Strict` cookie, and the password is configured only as a PBKDF2 hash.
+`/admin/` provides order management: revenue and order counts, filtering by payment status, order search, and decrypted buyer and shipping details. The admin session is stored in a signed `HttpOnly`, `SameSite=Strict` cookie, and the password is configured only as a PBKDF2 hash. After 8 consecutive failed logins a source IP is blocked for 15 minutes. The counter lives in the memory of the running instance, so add an edge rate limit on Cloudflare when you run more than one instance.
 
 When `ADMIN_PASSWORD_HASH` is not set locally, a demo admin panel is enabled at `http://localhost:5173/admin/` with password `nano-demo-2026`. The production adapters never enable this default password and refuse to start if any admin environment variable is missing.
+
+### Fulfillment
+
+Shipping progress is recorded from the order detail drawer:
+
+- Mark a paid order as shipped, which stores the shipping timestamp. This can be undone.
+- Save a tracking number.
+- Export the order list as CSV, written with a UTF-8 BOM so Japanese text opens correctly in Excel.
+
+Buyer names are stored encrypted and cannot be queried in the database. The search box sends email addresses and order ids to the server and filters names within the loaded page.
 
 ### Product management
 

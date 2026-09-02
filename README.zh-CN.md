@@ -17,7 +17,9 @@ npm run dev
 
 打开 `http://localhost:5173`。未设置环境变量时会以内存数据库和演示支付启动，可以立即查看 UI 和下单流程。
 
-商品数据以 Postgres 的 `checkout_products` 表为正本，通过管理后台编辑。初始商品由迁移脚本自动创建。`src/config/order-spec.ts` 定义店铺名称、销售条件页面文案，以及未连接数据库时的兜底商品。
+商品数据以 Postgres 的 `checkout_products` 表为正本，通过管理后台编辑。初始商品由迁移脚本自动创建。当没有任何在售商品时，前台显示不可购买状态，下单接口返回 `409`。
+
+`src/config/order-spec.ts` 定义店铺名称和「特定商取引法に基づく表記」页面的内容。**其中的销售主体名称、负责人、地址和电话号码目前是占位值，上线前必须替换为真实的经营者信息。**
 
 ## 生产环境变量
 
@@ -32,7 +34,7 @@ npm run dev
 - `APP_URL` — 例如 `https://shop.example.com`
 - `DATABASE_URL` — 使用 Cloudflare Hyperdrive 时不需要。
 
-建表方式二选一：在 SQL 编辑器中按编号顺序执行 `migrations/` 下的 SQL（`0000_checkout_orders.sql` → `0001_checkout_products.sql`），或设置 `DIRECT_URL` 后运行 `npm run db:push`。
+建表方式二选一：在 SQL 编辑器中按编号顺序执行 `migrations/` 下的 SQL（`0000_checkout_orders.sql` → `0001_checkout_products.sql` → `0002_order_fulfillment.sql`），或设置 `DIRECT_URL` 后运行 `npm run db:push`。
 
 ## Cloudflare Pages + Hyperdrive（推荐）
 
@@ -58,9 +60,19 @@ npm run dev
 
 ## 商户管理后台
 
-`/admin/` 提供订单管理界面，包括销售额与订单统计、支付状态筛选、订单搜索，以及解密后的购买者和配送信息。管理会话存放在签名、`HttpOnly`、`SameSite=Strict` 的 Cookie 中，密码只以 PBKDF2 哈希形式配置。
+`/admin/` 提供订单管理界面，包括销售额与订单统计、支付状态筛选、订单搜索，以及解密后的购买者和配送信息。管理会话存放在签名、`HttpOnly`、`SameSite=Strict` 的 Cookie 中，密码只以 PBKDF2 哈希形式配置。同一来源 IP 连续 8 次登录失败后会被锁定 15 分钟。计数保存在运行实例的内存里，多实例部署请同时在 Cloudflare 侧配置限流。
 
 本地未设置 `ADMIN_PASSWORD_HASH` 时会启用演示后台，地址为 `http://localhost:5173/admin/`，密码为 `nano-demo-2026`。生产适配器不会启用此默认密码；缺少管理员环境变量时会直接拒绝启动。
+
+### 发货管理
+
+在订单详情中可以记录履约状态：
+
+- 把已支付的订单标记为「已发货」并记录发货时间，也可以撤销。
+- 保存物流追踪号。
+- 导出订单 CSV，带 UTF-8 BOM，Excel 打开日文不会乱码。
+
+购买者姓名以加密形式存储，数据库无法直接检索。搜索框对邮箱和订单 ID 走服务端查询，对姓名则在已加载的订单中本地过滤。
 
 ### 商品管理
 

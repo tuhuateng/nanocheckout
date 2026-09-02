@@ -1,8 +1,9 @@
-import { ProductUnavailableError, type AdminOrderRecord, type CheckoutDatabase, type OrderRecord, type OrderStats, type OrderStatus, type PendingOrderInput, type ProductInput, type ProductRecord } from './types';
+import { ProductUnavailableError, type AdminOrderRecord, type CheckoutDatabase, type FulfillmentPatch, type OrderQuery, type OrderRecord, type OrderStats, type OrderStatus, type PendingOrderInput, type ProductInput, type ProductRecord } from './types';
 
 export class MemoryCheckoutDatabase implements CheckoutDatabase {
   private readonly orders = new Map<string, AdminOrderRecord>();
   private readonly idempotency = new Map<string, string>();
+  private readonly emailLookups = new Map<string, string>();
   private readonly products = new Map<string, ProductRecord>();
 
   constructor(initialProducts: ProductRecord[] = []) {
@@ -33,11 +34,14 @@ export class MemoryCheckoutDatabase implements CheckoutDatabase {
       currency: input.currency,
       productId: input.productId,
       productName: input.productName,
+      shippedAt: null,
+      trackingNumber: null,
       createdAt: now,
       updatedAt: now,
     };
     this.orders.set(input.id, order);
     this.idempotency.set(input.idempotencyKey, input.id);
+    this.emailLookups.set(input.id, input.emailLookup);
     return order;
   }
 
@@ -60,15 +64,26 @@ export class MemoryCheckoutDatabase implements CheckoutDatabase {
     }
   }
 
-  async listOrders(options: { limit: number; status?: OrderStatus }): Promise<AdminOrderRecord[]> {
+  async listOrders(options: OrderQuery): Promise<AdminOrderRecord[]> {
     return Array.from(this.orders.values())
       .filter((order) => !options.status || order.status === options.status)
+      .filter((order) => !options.emailLookup || this.emailLookups.get(order.id) === options.emailLookup)
+      .filter((order) => !options.idPrefix || order.id.startsWith(options.idPrefix))
       .sort((left, right) => new Date(right.createdAt).getTime() - new Date(left.createdAt).getTime())
       .slice(0, options.limit);
   }
 
   async getOrder(orderId: string): Promise<AdminOrderRecord | null> {
     return this.orders.get(orderId) || null;
+  }
+
+  async updateFulfillment(orderId: string, patch: FulfillmentPatch): Promise<AdminOrderRecord | null> {
+    const order = this.orders.get(orderId);
+    if (!order) return null;
+    if (patch.shippedAt !== undefined) order.shippedAt = patch.shippedAt;
+    if (patch.trackingNumber !== undefined) order.trackingNumber = patch.trackingNumber;
+    order.updatedAt = new Date();
+    return { ...order };
   }
 
   async getOrderStats(): Promise<OrderStats> {

@@ -57,8 +57,22 @@ export type AdminOrderRecord = OrderRecord & {
   currency: string;
   productId: string | null;
   productName: string;
+  shippedAt: string | Date | null;
+  trackingNumber: string | null;
   createdAt: string | Date;
   updatedAt: string | Date;
+};
+
+export type OrderQuery = {
+  limit: number;
+  status?: OrderStatus;
+  emailLookup?: string;
+  idPrefix?: string;
+};
+
+export type FulfillmentPatch = {
+  shippedAt?: Date | null;
+  trackingNumber?: string | null;
 };
 
 export type OrderStats = {
@@ -73,8 +87,9 @@ export interface CheckoutDatabase {
   createPendingOrder(input: PendingOrderInput): Promise<OrderRecord>;
   attachPaymentSession(orderId: string, paymentSessionId: string): Promise<void>;
   transitionPaymentSession(paymentSessionId: string, status: OrderStatus): Promise<void>;
-  listOrders(options: { limit: number; status?: OrderStatus }): Promise<AdminOrderRecord[]>;
+  listOrders(options: OrderQuery): Promise<AdminOrderRecord[]>;
   getOrder(orderId: string): Promise<AdminOrderRecord | null>;
+  updateFulfillment(orderId: string, patch: FulfillmentPatch): Promise<AdminOrderRecord | null>;
   getOrderStats(): Promise<OrderStats>;
   listProducts(options?: { includeArchived?: boolean }): Promise<ProductRecord[]>;
   getProductBySku(sku: string): Promise<ProductRecord | null>;

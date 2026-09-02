@@ -43,11 +43,18 @@ const productSchema = z.object({
   status: z.enum(['active', 'draft', 'archived']),
   inventory: z.number().int().min(0).max(10_000_000).nullable(),
 });
+const fulfillmentSchema = z.object({
+  shipped: z.boolean().optional(),
+  trackingNumber: z.string().trim().max(120).nullable().optional(),
+});
 const validStatuses = new Set<OrderStatus>(['pending', 'paid', 'payment_failed', 'cancelled']);
 const adminCookie = 'nano_admin_session';
+const maxLoginFailures = 8;
+const loginBlockMs = 15 * 60 * 1000;
 
 export function createCheckoutApp(deps: CheckoutAppDependencies) {
   const app = new Hono();
+  const loginFailures = new Map<string, { count: number; blockedUntil: number }>();
   app.use('*', secureHeaders());
   app.use('/api/admin/*', async (context, next) => {
     await next();
@@ -74,6 +81,13 @@ export function createCheckoutApp(deps: CheckoutAppDependencies) {
   });
 
   app.post('/api/admin/session', async (context) => {
+    const client = clientKey(context);
+    const blockedFor = loginBlockRemaining(client);
+    if (blockedFor > 0) {
+      context.header('retry-after', String(Math.ceil(blockedFor / 1000)));
+      return context.json({ error: '試行回数が上限に達しました。しばらくしてからお試しください。' }, 429);
+    }
+
     let input: z.infer<typeof adminLoginSchema>;
     try {
       input = adminLoginSchema.parse(await context.req.json());
@@ -81,8 +95,10 @@ export function createCheckoutApp(deps: CheckoutAppDependencies) {
       return context.json({ error: 'パスワードを入力してください。' }, 400);
     }
     if (!(await verifyAdminPassword(input.password, deps.secrets.adminPasswordHash))) {
+      recordLoginFailure(client);
       return context.json({ error: 'パスワードが正しくありません。' }, 401);
     }
+    loginFailures.delete(client);
     const session = await createAdminSession(deps.secrets.adminSessionSecret);
     setCookie(context, adminCookie, session, {
       httpOnly: true,
@@ -110,12 +126,72 @@ export function createCheckoutApp(deps: CheckoutAppDependencies) {
 
   app.get('/api/admin/orders', async (context) => {
     if (!(await isAdmin(context))) return context.json({ error: 'Unauthorized' }, 401);
-    const rawStatus = context.req.query('status');
-    const status = rawStatus && validStatuses.has(rawStatus as OrderStatus) ? rawStatus as OrderStatus : undefined;
-    const rawLimit = Number(context.req.query('limit') || 50);
-    const limit = Math.min(100, Math.max(1, Number.isInteger(rawLimit) ? rawLimit : 50));
-    const orders = await deps.db.listOrders({ limit, status });
+    const orders = await deps.db.listOrders(await buildOrderQuery(context, 50, 100));
     return context.json({ orders: await Promise.all(orders.map(toAdminResponse)) });
+  });
+
+  app.get('/api/admin/orders.csv', async (context) => {
+    if (!(await isAdmin(context))) return context.json({ error: 'Unauthorized' }, 401);
+    const orders = await deps.db.listOrders(await buildOrderQuery(context, 1_000, 5_000));
+    const rows = await Promise.all(orders.map(async (order) => {
+      const buyer = await decryptPii<Record<string, string>>(order.encryptedPii, deps.secrets.piiKey);
+      return [
+        order.id,
+        order.status,
+        order.shippedAt ? new Date(order.shippedAt).toISOString() : '',
+        order.trackingNumber || '',
+        new Date(order.createdAt).toISOString(),
+        order.productName,
+        String(order.quantity),
+        String(order.totalAmount),
+        order.currency,
+        `${buyer.familyName || ''} ${buyer.givenName || ''}`.trim(),
+        buyer.email || '',
+        buyer.phone || '',
+        buyer.postalCode || '',
+        buyer.prefecture || '',
+        buyer.city || '',
+        buyer.addressLine1 || '',
+        buyer.addressLine2 || '',
+      ];
+    }));
+    const header = [
+      '注文ID', 'ステータス', '発送日時', '追跡番号', '注文日時', '商品名', '数量', '合計金額', '通貨',
+      'お名前', 'メール', '電話番号', '郵便番号', '都道府県', '市区町村', '番地', '建物名',
+    ];
+    const csv = [header, ...rows].map((row) => row.map(escapeCsv).join(',')).join('\r\n');
+    const filename = `orders-${new Date().toISOString().slice(0, 10)}.csv`;
+    context.header('content-type', 'text/csv; charset=utf-8');
+    context.header('content-disposition', `attachment; filename="${filename}"`);
+    return context.body(`﻿${csv}`);
+  });
+
+  app.patch('/api/admin/orders/:id', async (context) => {
+    if (!(await isAdmin(context))) return context.json({ error: 'Unauthorized' }, 401);
+    let patch: z.infer<typeof fulfillmentSchema>;
+    try {
+      patch = fulfillmentSchema.parse(await context.req.json());
+    } catch (error) {
+      if (error instanceof z.ZodError) return context.json({ error: '入力内容を確認してください。', fields: z.flattenError(error).fieldErrors }, 422);
+      return context.json({ error: 'JSON の形式が正しくありません。' }, 400);
+    }
+    if (patch.shipped === undefined && patch.trackingNumber === undefined) {
+      return context.json({ error: '変更内容がありません。' }, 400);
+    }
+
+    const orderId = context.req.param('id');
+    const current = await deps.db.getOrder(orderId);
+    if (!current) return context.json({ error: 'Order not found' }, 404);
+    if (patch.shipped === true && current.status !== 'paid') {
+      return context.json({ error: '決済が完了した注文のみ発送済みにできます。' }, 409);
+    }
+
+    const updated = await deps.db.updateFulfillment(orderId, {
+      ...(patch.shipped === undefined ? {} : { shippedAt: patch.shipped ? new Date() : null }),
+      ...(patch.trackingNumber === undefined ? {} : { trackingNumber: patch.trackingNumber || null }),
+    });
+    if (!updated) return context.json({ error: 'Order not found' }, 404);
+    return context.json({ order: await toAdminResponse(updated) });
   });
 
   app.get('/api/admin/orders/:id', async (context) => {
@@ -215,7 +291,7 @@ export function createCheckoutApp(deps: CheckoutAppDependencies) {
         shippingAmount: selectedProduct.shippingAmount,
         totalAmount,
         currency: selectedProduct.currency,
-        productId: selectedProduct.id === 'legacy-default' ? null : selectedProduct.id,
+        productId: selectedProduct.id,
         productName: selectedProduct.name,
       });
       persistedOrderId = order.id;
@@ -275,24 +351,49 @@ export function createCheckoutApp(deps: CheckoutAppDependencies) {
 
   async function resolveProduct(sku?: string): Promise<ProductRecord | null> {
     if (sku) return deps.db.getProductBySku(sku);
-    const firstActive = (await deps.db.listProducts()).find((product) => product.status === 'active');
-    if (firstActive) return firstActive;
-    const now = new Date();
-    return {
-      id: 'legacy-default',
-      sku: 'default-product',
-      name: deps.orderSpec.product.name,
-      edition: deps.orderSpec.product.edition,
-      description: deps.orderSpec.product.description,
-      unitAmount: deps.orderSpec.product.unitAmount,
-      currency: deps.orderSpec.product.currency,
-      shippingAmount: deps.orderSpec.shippingAmount,
-      imageUrl: deps.orderSpec.product.image,
-      status: 'active',
-      inventory: null,
-      createdAt: now,
-      updatedAt: now,
-    };
+    return (await deps.db.listProducts()).find((product) => product.status === 'active') || null;
+  }
+
+  async function buildOrderQuery(context: Parameters<typeof getCookie>[0], fallbackLimit: number, maxLimit: number) {
+    const rawStatus = context.req.query('status');
+    const status = rawStatus && validStatuses.has(rawStatus as OrderStatus) ? rawStatus as OrderStatus : undefined;
+    const rawLimit = Number(context.req.query('limit') || fallbackLimit);
+    const limit = Math.min(maxLimit, Math.max(1, Number.isInteger(rawLimit) ? rawLimit : fallbackLimit));
+
+    const search = (context.req.query('q') || '').trim();
+    if (!search) return { limit, status };
+    if (search.includes('@')) {
+      return { limit, status, emailLookup: await createLookupDigest(search, deps.secrets.lookupPepper) };
+    }
+    const idPrefix = search.toLowerCase().replace(/[^0-9a-f-]/g, '');
+    return idPrefix ? { limit, status, idPrefix } : { limit, status };
+  }
+
+  function clientKey(context: Parameters<typeof getCookie>[0]) {
+    return context.req.header('cf-connecting-ip')
+      || context.req.header('x-forwarded-for')?.split(',')[0]?.trim()
+      || 'unknown';
+  }
+
+  function loginBlockRemaining(client: string) {
+    const entry = loginFailures.get(client);
+    if (!entry) return 0;
+    if (entry.blockedUntil <= Date.now()) {
+      loginFailures.delete(client);
+      return 0;
+    }
+    return entry.count >= maxLoginFailures ? entry.blockedUntil - Date.now() : 0;
+  }
+
+  function recordLoginFailure(client: string) {
+    const now = Date.now();
+    for (const [key, entry] of loginFailures) {
+      if (entry.blockedUntil <= now) loginFailures.delete(key);
+    }
+    const entry = loginFailures.get(client) || { count: 0, blockedUntil: 0 };
+    entry.count += 1;
+    entry.blockedUntil = now + loginBlockMs;
+    loginFailures.set(client, entry);
   }
 
   function toPublicProduct(product: ProductRecord) {
@@ -317,6 +418,12 @@ export function createCheckoutApp(deps: CheckoutAppDependencies) {
       if (error instanceof z.ZodError) return { response: context.json({ error: '入力内容を確認してください。', fields: z.flattenError(error).fieldErrors }, 422) };
       return { response: context.json({ error: 'JSON の形式が正しくありません。' }, 400) };
     }
+  }
+
+  function escapeCsv(value: string) {
+    const normalized = value.replace(/\r?\n/g, ' ');
+    const guarded = /^[=+\-@]/.test(normalized) ? `'${normalized}` : normalized;
+    return `"${guarded.replaceAll('"', '""')}"`;
   }
 
   function isUniqueViolation(error: unknown) {

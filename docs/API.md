@@ -50,7 +50,9 @@
 | `DELETE` | `/api/admin/session` | Cookie | 退出后台 |
 | `GET` | `/api/admin/summary` | 管理员 Cookie | 获取后台概要 |
 | `GET` | `/api/admin/orders` | 管理员 Cookie | 查询订单 |
+| `GET` | `/api/admin/orders.csv` | 管理员 Cookie | 导出订单 CSV |
 | `GET` | `/api/admin/orders/:id` | 管理员 Cookie | 获取订单详情 |
+| `PATCH` | `/api/admin/orders/:id` | 管理员 Cookie | 更新发货状态 |
 | `GET` | `/api/admin/products` | 管理员 Cookie | 获取全部商品 |
 | `POST` | `/api/admin/products` | 管理员 Cookie | 创建商品 |
 | `PATCH` | `/api/admin/products/:id` | 管理员 Cookie | 更新商品 |
@@ -213,7 +215,7 @@ Idempotency-Key: 550e8400-e29b-41d4-a716-446655440000
 | --- | --- |
 | `201` | 创建成功 |
 | `400` | 缺少或错误的 `Idempotency-Key`、JSON 格式错误 |
-| `409` | 商品未发布、已售罄或并发购买导致库存不足 |
+| `409` | 商品未发布、已售罄、并发购买导致库存不足，或店铺当前没有任何在售商品 |
 | `422` | 收件人、地址或数量校验失败 |
 | `502` | Stripe Session 创建失败；已预留的库存会自动归还 |
 
@@ -414,7 +416,9 @@ Content-Type: application/json
 { "authenticated": true }
 ```
 
-密码错误返回 `401`。本地演示环境默认密码为 `nano-demo-2026`，正式环境必须通过 `ADMIN_PASSWORD_HASH` 配置自己的密码哈希。
+密码错误返回 `401`。同一来源 IP 连续 8 次失败后，该 IP 会被锁定 15 分钟，期间无论密码是否正确都返回 `429`，并带 `Retry-After` 响应头。计数保存在运行实例的内存中，多实例部署时请在 Cloudflare 等边缘层再叠加一层限流。
+
+本地演示环境默认密码为 `nano-demo-2026`，正式环境必须通过 `ADMIN_PASSWORD_HASH` 配置自己的密码哈希。
 
 ### 7.3 退出
 
@@ -469,7 +473,7 @@ GET /api/admin/summary
 ### 8.2 订单列表
 
 ```http
-GET /api/admin/orders?status=paid&limit=50
+GET /api/admin/orders?status=paid&limit=50&q=buyer@example.com
 ```
 
 查询参数：
@@ -478,6 +482,9 @@ GET /api/admin/orders?status=paid&limit=50
 | --- | --- |
 | `status` | 可选：`pending`、`paid`、`payment_failed`、`cancelled` |
 | `limit` | 1–100，默认 50，超出范围会被限制到有效范围 |
+| `q` | 可选。含 `@` 时按邮箱精确匹配，否则按订单 ID 前缀匹配 |
+
+购买者姓名保存在加密字段中，数据库无法直接检索，因此 `q` 只支持邮箱和订单 ID。后台界面在此基础上，对已加载的这一页订单再做一次本地的姓名过滤。
 
 响应 `200`：
 
@@ -495,6 +502,8 @@ GET /api/admin/orders?status=paid&limit=50
       "currency": "jpy",
       "productId": "product-default-tray",
       "productName": "Everyday Carry Tray",
+      "shippedAt": "2026-09-02T11:20:00.000Z",
+      "trackingNumber": "YAMATO-8899-0011",
       "createdAt": "2026-09-02T10:02:57.765Z",
       "updatedAt": "2026-09-02T10:03:10.000Z",
       "buyer": {
@@ -530,6 +539,48 @@ GET /api/admin/orders/{orderId}
 ```
 
 订单不存在时返回 `404`。
+
+### 8.4 更新发货状态
+
+```http
+PATCH /api/admin/orders/{orderId}
+Content-Type: application/json
+```
+
+请求字段：
+
+| 字段 | 类型 | 规则 |
+| --- | --- | --- |
+| `shipped` | boolean | 可选。`true` 记录当前时间为发货时间，`false` 清除发货时间 |
+| `trackingNumber` | string/null | 可选。最多 120 字符，`null` 或空字符串表示清除 |
+
+标记发货：
+
+```json
+{ "shipped": true, "trackingNumber": "YAMATO-8899-0011" }
+```
+
+成功返回 `200` 和更新后的完整订单，格式与订单详情一致。空对象返回 `400`，订单不存在返回 `404`，字段校验失败返回 `422`。
+
+订单状态不是 `paid` 时，`shipped: true` 返回 `409`：
+
+```json
+{ "error": "決済が完了した注文のみ発送済みにできます。" }
+```
+
+这一限制只作用于「标记为已发货」。清除发货状态和单独保存追踪号不受订单状态限制。
+
+### 8.5 导出订单 CSV
+
+```http
+GET /api/admin/orders.csv?status=paid&limit=1000
+```
+
+参数与订单列表一致，`limit` 默认 1000，上限 5000。响应为 `text/csv; charset=utf-8`，带 UTF-8 BOM 以便 Excel 正确识别日文，并通过 `Content-Disposition` 提示下载。
+
+列依次为：注文ID、ステータス、発送日時、追跡番号、注文日時、商品名、数量、合計金額、通貨、お名前、メール、電話番号、郵便番号、都道府県、市区町村、番地、建物名。
+
+所有字段都会加引号，且以 `=`、`+`、`-`、`@` 开头的值会被加上前导单引号，避免电子表格把它当作公式执行。该文件包含解密后的个人信息，请按内部规定保管。
 
 ## 9. 管理员商品接口
 

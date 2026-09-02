@@ -19,6 +19,34 @@ const validOrder = {
   quantity: 2,
 };
 
+function createDefaultProduct(): ProductRecord {
+  const now = new Date();
+  return {
+    id: 'product-default-tray',
+    sku: 'everyday-tray-01',
+    name: orderSpec.product.name,
+    edition: orderSpec.product.edition,
+    description: orderSpec.product.description,
+    unitAmount: orderSpec.product.unitAmount,
+    currency: 'jpy',
+    shippingAmount: orderSpec.shippingAmount,
+    imageUrl: orderSpec.product.image,
+    status: 'active',
+    inventory: null,
+    createdAt: now,
+    updatedAt: now,
+  };
+}
+
+async function loginAsAdmin(app: ReturnType<typeof createCheckoutApp>, password: string) {
+  const login = await app.request('/api/admin/session', {
+    method: 'POST',
+    headers: { 'content-type': 'application/json' },
+    body: JSON.stringify({ password }),
+  });
+  return login.headers.get('set-cookie')!.split(';', 1)[0];
+}
+
 function setup(options: { adminPasswordHash?: string; db?: CheckoutDatabase; stripeFailure?: boolean } = {}) {
   const createCheckoutSession = vi.fn(async () => {
     if (options.stripeFailure) throw new Error('Stripe unavailable');
@@ -28,7 +56,7 @@ function setup(options: { adminPasswordHash?: string; db?: CheckoutDatabase; str
     createCheckoutSession,
     verifyWebhook: vi.fn(async () => ({ type: 'checkout.session.completed', paymentSessionId: 'cs_test_123' })),
   };
-  const db = options.db || new MemoryCheckoutDatabase();
+  const db = options.db || new MemoryCheckoutDatabase([createDefaultProduct()]);
   const app = createCheckoutApp({
     db,
     stripe,
@@ -103,6 +131,7 @@ describe('checkout app', () => {
     });
     expect(login.status).toBe(200);
     const setCookie = login.headers.get('set-cookie')!;
+    expect(setCookie).toContain('Path=/');
     expect(setCookie).toContain('HttpOnly');
     expect(setCookie).toContain('SameSite=Strict');
 
@@ -152,12 +181,7 @@ describe('checkout app', () => {
   it('creates and publishes products through authenticated admin APIs', async () => {
     const adminPassword = 'admin-product-password';
     const { app } = setup({ adminPasswordHash: await hashAdminPassword(adminPassword, 100_000) });
-    const login = await app.request('/api/admin/session', {
-      method: 'POST',
-      headers: { 'content-type': 'application/json' },
-      body: JSON.stringify({ password: adminPassword }),
-    });
-    const cookie = login.headers.get('set-cookie')!.split(';', 1)[0];
+    const cookie = await loginAsAdmin(app, adminPassword);
 
     const create = await app.request('/api/admin/products', {
       method: 'POST',
@@ -207,5 +231,112 @@ describe('checkout app', () => {
     });
     expect(response.status).toBe(502);
     await expect(database.getProductBySku(product.sku)).resolves.toMatchObject({ inventory: 5 });
+  });
+
+  it('refuses checkout when the catalog has no published product', async () => {
+    const { app, createCheckoutSession } = setup({ db: new MemoryCheckoutDatabase() });
+    const response = await app.request('/api/orders', {
+      method: 'POST',
+      headers: { 'content-type': 'application/json', 'idempotency-key': crypto.randomUUID() },
+      body: JSON.stringify(validOrder),
+    });
+    expect(response.status).toBe(409);
+    expect(createCheckoutSession).not.toHaveBeenCalled();
+    const storefront = await app.request('/api/storefront/products');
+    await expect(storefront.json()).resolves.toEqual({ products: [] });
+  });
+
+  it('records fulfillment only after the order is paid', async () => {
+    const adminPassword = 'admin-fulfillment-pass';
+    const { app } = setup({ adminPasswordHash: await hashAdminPassword(adminPassword, 100_000) });
+    const created = await app.request('/api/orders', {
+      method: 'POST',
+      headers: { 'content-type': 'application/json', 'idempotency-key': crypto.randomUUID() },
+      body: JSON.stringify(validOrder),
+    });
+    const { orderId } = await created.json() as { orderId: string };
+    const cookie = await loginAsAdmin(app, adminPassword);
+
+    const tooEarly = await app.request(`/api/admin/orders/${orderId}`, {
+      method: 'PATCH',
+      headers: { cookie, 'content-type': 'application/json' },
+      body: JSON.stringify({ shipped: true }),
+    });
+    expect(tooEarly.status).toBe(409);
+
+    await app.request('/api/webhooks/stripe', {
+      method: 'POST',
+      headers: { 'stripe-signature': 'test-signature' },
+      body: JSON.stringify({ id: 'evt_test' }),
+    });
+
+    const shipped = await app.request(`/api/admin/orders/${orderId}`, {
+      method: 'PATCH',
+      headers: { cookie, 'content-type': 'application/json' },
+      body: JSON.stringify({ shipped: true, trackingNumber: '1234-5678' }),
+    });
+    expect(shipped.status).toBe(200);
+    const body = await shipped.json() as { order: { shippedAt: string | null; trackingNumber: string | null; encryptedPii?: string } };
+    expect(body.order.shippedAt).toBeTruthy();
+    expect(body.order.trackingNumber).toBe('1234-5678');
+    expect(body.order.encryptedPii).toBeUndefined();
+  });
+
+  it('exports orders as CSV for the authenticated merchant only', async () => {
+    const adminPassword = 'admin-export-password';
+    const { app } = setup({ adminPasswordHash: await hashAdminPassword(adminPassword, 100_000) });
+    await app.request('/api/orders', {
+      method: 'POST',
+      headers: { 'content-type': 'application/json', 'idempotency-key': crypto.randomUUID() },
+      body: JSON.stringify(validOrder),
+    });
+
+    const anonymous = await app.request('/api/admin/orders.csv');
+    expect(anonymous.status).toBe(401);
+
+    const cookie = await loginAsAdmin(app, adminPassword);
+    const exported = await app.request('/api/admin/orders.csv', { headers: { cookie } });
+    expect(exported.status).toBe(200);
+    expect(exported.headers.get('content-type')).toContain('text/csv');
+    const csv = await exported.text();
+    expect(csv).toContain(validOrder.email);
+    expect(csv).toContain('150-0001');
+  });
+
+  it('finds an older order by email through the server side search', async () => {
+    const adminPassword = 'admin-search-password';
+    const { app } = setup({ adminPasswordHash: await hashAdminPassword(adminPassword, 100_000) });
+    await app.request('/api/orders', {
+      method: 'POST',
+      headers: { 'content-type': 'application/json', 'idempotency-key': crypto.randomUUID() },
+      body: JSON.stringify(validOrder),
+    });
+    const cookie = await loginAsAdmin(app, adminPassword);
+
+    const hit = await app.request(`/api/admin/orders?q=${encodeURIComponent(validOrder.email)}`, { headers: { cookie } });
+    await expect(hit.json()).resolves.toMatchObject({ orders: [{ buyer: { email: validOrder.email } }] });
+
+    const miss = await app.request('/api/admin/orders?q=nobody@example.com', { headers: { cookie } });
+    await expect(miss.json()).resolves.toEqual({ orders: [] });
+  });
+
+  it('blocks repeated failed admin logins', async () => {
+    const adminPassword = 'admin-throttle-password';
+    const { app } = setup({ adminPasswordHash: await hashAdminPassword(adminPassword, 100_000) });
+    const attempt = (password: string) => app.request('/api/admin/session', {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ password }),
+    });
+
+    for (let index = 0; index < 8; index += 1) {
+      expect((await attempt('wrong-password')).status).toBe(401);
+    }
+    const blocked = await attempt('wrong-password');
+    expect(blocked.status).toBe(429);
+    expect(blocked.headers.get('retry-after')).toBeTruthy();
+
+    const correctButBlocked = await attempt(adminPassword);
+    expect(correctButBlocked.status).toBe(429);
   });
 });

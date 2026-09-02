@@ -1,5 +1,5 @@
 import postgres, { type Sql } from 'postgres';
-import { ProductUnavailableError, type AdminOrderRecord, type CheckoutDatabase, type OrderRecord, type OrderStats, type OrderStatus, type PendingOrderInput, type ProductInput, type ProductRecord } from './types';
+import { ProductUnavailableError, type AdminOrderRecord, type CheckoutDatabase, type FulfillmentPatch, type OrderQuery, type OrderRecord, type OrderStats, type OrderStatus, type PendingOrderInput, type ProductInput, type ProductRecord } from './types';
 
 export function createPostgresDatabase(connectionString: string): CheckoutDatabase {
   const sql = postgres(connectionString, {
@@ -78,15 +78,38 @@ export class PostgresCheckoutDatabase implements CheckoutDatabase {
     });
   }
 
-  async listOrders(options: { limit: number; status?: OrderStatus }): Promise<AdminOrderRecord[]> {
-    const rows = options.status
-      ? await this.sql`SELECT id, status, payment_session_id, pii_ciphertext, quantity, unit_amount, shipping_amount, total_amount, currency, product_id, product_name, created_at, updated_at FROM checkout_orders WHERE status = ${options.status} ORDER BY created_at DESC LIMIT ${options.limit}`
-      : await this.sql`SELECT id, status, payment_session_id, pii_ciphertext, quantity, unit_amount, shipping_amount, total_amount, currency, product_id, product_name, created_at, updated_at FROM checkout_orders ORDER BY created_at DESC LIMIT ${options.limit}`;
+  private orderColumns() {
+    return this.sql`id, status, payment_session_id, pii_ciphertext, quantity, unit_amount, shipping_amount, total_amount, currency, product_id, product_name, shipped_at, tracking_number, created_at, updated_at`;
+  }
+
+  async listOrders(options: OrderQuery): Promise<AdminOrderRecord[]> {
+    const conditions = [];
+    if (options.status) conditions.push(this.sql`status = ${options.status}`);
+    if (options.emailLookup) conditions.push(this.sql`email_lookup = ${options.emailLookup}`);
+    if (options.idPrefix) conditions.push(this.sql`id LIKE ${`${options.idPrefix}%`}`);
+    const rows = conditions.length
+      ? await this.sql`
+          SELECT ${this.orderColumns()} FROM checkout_orders
+          WHERE ${conditions.reduce((left, right) => this.sql`${left} AND ${right}`)}
+          ORDER BY created_at DESC LIMIT ${options.limit}
+        `
+      : await this.sql`SELECT ${this.orderColumns()} FROM checkout_orders ORDER BY created_at DESC LIMIT ${options.limit}`;
     return rows.map(mapAdminOrder);
   }
 
   async getOrder(orderId: string): Promise<AdminOrderRecord | null> {
-    const rows = await this.sql`SELECT id, status, payment_session_id, pii_ciphertext, quantity, unit_amount, shipping_amount, total_amount, currency, product_id, product_name, created_at, updated_at FROM checkout_orders WHERE id = ${orderId} LIMIT 1`;
+    const rows = await this.sql`SELECT ${this.orderColumns()} FROM checkout_orders WHERE id = ${orderId} LIMIT 1`;
+    return rows[0] ? mapAdminOrder(rows[0]) : null;
+  }
+
+  async updateFulfillment(orderId: string, patch: FulfillmentPatch): Promise<AdminOrderRecord | null> {
+    const values: Record<string, unknown> = { updated_at: new Date() };
+    if (patch.shippedAt !== undefined) values.shipped_at = patch.shippedAt;
+    if (patch.trackingNumber !== undefined) values.tracking_number = patch.trackingNumber;
+    const rows = await this.sql`
+      UPDATE checkout_orders SET ${this.sql(values)} WHERE id = ${orderId}
+      RETURNING ${this.orderColumns()}
+    `;
     return rows[0] ? mapAdminOrder(rows[0]) : null;
   }
 
@@ -180,6 +203,8 @@ function mapAdminOrder(row: Record<string, unknown>): AdminOrderRecord {
     currency: String(row.currency),
     productId: row.product_id ? String(row.product_id) : null,
     productName: row.product_name ? String(row.product_name) : 'Product',
+    shippedAt: (row.shipped_at as string | Date | null) ?? null,
+    trackingNumber: row.tracking_number ? String(row.tracking_number) : null,
     createdAt: row.created_at as string | Date,
     updatedAt: row.updated_at as string | Date,
   };

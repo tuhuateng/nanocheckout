@@ -36,6 +36,8 @@ export const checkoutOrders = pgTable('checkout_orders', {
   productName: text('product_name').notNull().default('Product'),
   status: varchar('status', { length: 24 }).notNull().default('pending'),
   paymentSessionId: text('payment_session_id'),
+  shippedAt: timestamp('shipped_at', { withTimezone: true }),
+  trackingNumber: text('tracking_number'),
   createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
   updatedAt: timestamp('updated_at', { withTimezone: true }).notNull().defaultNow(),
 }, (table) => [
@@ -44,5 +46,6 @@ export const checkoutOrders = pgTable('checkout_orders', {
   index('checkout_orders_email_lookup_idx').on(table.emailLookup),
   index('checkout_orders_status_created_idx').on(table.status, table.createdAt),
   index('checkout_orders_product_idx').on(table.productId),
+  index('checkout_orders_shipped_idx').on(table.shippedAt),
   check('checkout_orders_quantity_check', sql`${table.quantity} BETWEEN 1 AND 5`),
 ]);

@@ -7,6 +7,7 @@ import {
   ChevronRight,
   CircleDollarSign,
   Clock3,
+  Download,
   Eye,
   LayoutDashboard,
   LoaderCircle,
@@ -19,6 +20,7 @@ import {
   Search,
   ShoppingBag,
   Store,
+  Truck,
   X,
 } from 'lucide-react';
 import { formatYen, orderSpec } from '../config/order-spec';
@@ -36,6 +38,8 @@ type AdminOrder = {
   shippingAmount: number;
   totalAmount: number;
   currency: string;
+  shippedAt: string | null;
+  trackingNumber: string | null;
   createdAt: string;
   updatedAt: string;
   buyer: {
@@ -198,31 +202,44 @@ function AdminDashboard({ onLogout }: { onLogout: () => void }) {
   const [editingProduct, setEditingProduct] = useState<AdminProduct | 'new' | null>(null);
 
   const loadSummary = useCallback(async () => {
-    setLoading(true);
     const [response, productResponse] = await Promise.all([
       fetch('/api/admin/summary'),
       fetch('/api/admin/products'),
     ]);
     if (response.status === 401 || productResponse.status === 401) return onLogout();
-    const result = (await response.json()) as { stats: Stats; orders: AdminOrder[] };
+    const result = (await response.json()) as { stats: Stats };
     const productResult = (await productResponse.json()) as { products: AdminProduct[] };
     setStats(result.stats);
-    setOrders(result.orders);
     setProducts(productResult.products);
+  }, [onLogout]);
+
+  const loadOrders = useCallback(async (status: '' | OrderStatus, query: string) => {
+    setLoading(true);
+    const params = new URLSearchParams({ limit: '100' });
+    if (status) params.set('status', status);
+    if (query) params.set('q', query);
+    const response = await fetch(`/api/admin/orders?${params.toString()}`);
+    if (response.status === 401) return onLogout();
+    const result = (await response.json()) as { orders: AdminOrder[] };
+    setOrders(result.orders);
     setLoading(false);
   }, [onLogout]);
 
   useEffect(() => { void loadSummary(); }, [loadSummary]);
 
-  const changeFilter = async (value: '' | OrderStatus) => {
-    setFilter(value);
-    setLoading(true);
-    const query = value ? `?status=${value}` : '';
-    const response = await fetch(`/api/admin/orders${query}`);
-    if (response.status === 401) return onLogout();
-    const result = (await response.json()) as { orders: AdminOrder[] };
-    setOrders(result.orders);
-    setLoading(false);
+  // Names live inside the encrypted payload, so only email addresses and order
+  // ids can be searched on the server. Anything else filters the loaded page.
+  useEffect(() => {
+    const query = search.trim();
+    const serverSearchable = query.includes('@') || /^[0-9a-f-]{4,}$/i.test(query);
+    if (query && !serverSearchable) return;
+    const timer = setTimeout(() => { void loadOrders(filter, serverSearchable ? query : ''); }, 300);
+    return () => clearTimeout(timer);
+  }, [search, filter, loadOrders]);
+
+  const orderUpdated = (updated: AdminOrder) => {
+    setOrders((current) => current.map((order) => (order.id === updated.id ? updated : order)));
+    setSelected((current) => (current && current.id === updated.id ? updated : current));
   };
 
   const logout = async () => {
@@ -237,6 +254,8 @@ function AdminDashboard({ onLogout }: { onLogout: () => void }) {
   }, [orders, search]);
 
   const paidRate = stats?.totalOrders ? Math.round((stats.paidOrders / stats.totalOrders) * 100) : 0;
+  const featuredProduct = useMemo(() => products.find((product) => product.status === 'active') || null, [products]);
+  const exportUrl = `/api/admin/orders.csv${filter ? `?status=${filter}` : ''}`;
 
   const updateProductStatus = async (product: AdminProduct) => {
     const status: ProductStatus = product.status === 'active' ? 'draft' : 'active';
@@ -302,19 +321,28 @@ function AdminDashboard({ onLogout }: { onLogout: () => void }) {
               <div className="rate-copy"><CheckCircle2 size={18} /><span><strong>正常に稼働中</strong>Stripe webhook から注文状態を自動更新します。</span></div>
             </div>
             <div className="admin-product-card">
-              <img src={orderSpec.product.image} alt="" />
-              <div><p className="admin-kicker">Your product</p><h2>{orderSpec.product.name}</h2><span>{formatYen(orderSpec.product.unitAmount)} · {orderSpec.product.edition}</span></div>
-              <a href="/" target="_blank"><Eye size={15} />ストアで見る</a>
+              <img src={featuredProduct?.imageUrl || '/product-tray.svg'} alt="" />
+              <div>
+                <p className="admin-kicker">Your product</p>
+                <h2>{featuredProduct?.name || '販売中の商品はありません'}</h2>
+                <span>{featuredProduct ? `${formatYen(featuredProduct.unitAmount)} · ${featuredProduct.edition || 'Standard edition'}` : '商品を追加して販売を開始します。'}</span>
+              </div>
+              {featuredProduct
+                ? <a href={`/?product=${encodeURIComponent(featuredProduct.sku)}`} target="_blank"><Eye size={15} />ストアで見る</a>
+                : <a href="#products"><Plus size={15} />商品を追加</a>}
             </div>
           </section>
 
           <section className="orders-panel" id="orders">
             <div className="orders-heading">
               <div><p className="admin-kicker">Orders</p><h2>最近の注文</h2></div>
-              <label className="order-search"><Search size={16} /><input aria-label="注文を検索" placeholder="名前・メール・注文ID" value={search} onChange={(event) => setSearch(event.target.value)} /></label>
+              <div className="orders-tools">
+                <label className="order-search"><Search size={16} /><input aria-label="注文を検索" placeholder="メール・注文ID・名前" value={search} onChange={(event) => setSearch(event.target.value)} /></label>
+                <a className="export-button" href={exportUrl}><Download size={15} />CSV 出力</a>
+              </div>
             </div>
             <div className="order-filters">
-              {filters.map((option) => <button key={option.value || 'all'} className={filter === option.value ? 'active' : ''} onClick={() => void changeFilter(option.value)}>{option.label}</button>)}
+              {filters.map((option) => <button key={option.value || 'all'} className={filter === option.value ? 'active' : ''} onClick={() => setFilter(option.value)}>{option.label}</button>)}
             </div>
             <div className="orders-table-wrap">
               <table className="orders-table">
@@ -328,7 +356,7 @@ function AdminDashboard({ onLogout }: { onLogout: () => void }) {
                       <td><strong>{order.buyer.familyName} {order.buyer.givenName}</strong><small>{order.buyer.email}</small></td>
                       <td>{dateFormatter.format(new Date(order.createdAt))}</td>
                       <td><strong>{formatYen(order.totalAmount)}</strong></td>
-                      <td><StatusBadge status={order.status} /></td>
+                      <td><StatusBadge status={order.status} />{order.shippedAt && <span className="shipped-tag"><Truck size={10} />発送済み</span>}</td>
                       <td><button aria-label="注文詳細を表示"><ChevronRight size={16} /></button></td>
                     </tr>
                   ))}
@@ -365,7 +393,7 @@ function AdminDashboard({ onLogout }: { onLogout: () => void }) {
         </div>
       </section>
 
-      {selected && <OrderDrawer order={selected} close={() => setSelected(null)} />}
+      {selected && <OrderDrawer order={selected} close={() => setSelected(null)} updated={orderUpdated} />}
       {editingProduct && <ProductEditor product={editingProduct === 'new' ? null : editingProduct} close={() => setEditingProduct(null)} saved={productSaved} />}
     </main>
   );
@@ -379,14 +407,57 @@ function StatusBadge({ status }: { status: OrderStatus }) {
   return <span className={`status-badge ${status}`}><i />{statusLabel[status]}</span>;
 }
 
-function OrderDrawer({ order, close }: { order: AdminOrder; close: () => void }) {
+function OrderDrawer({ order, close, updated }: { order: AdminOrder; close: () => void; updated: (order: AdminOrder) => void }) {
   const address = `〒${order.buyer.postalCode} ${order.buyer.prefecture}${order.buyer.city}${order.buyer.addressLine1}${order.buyer.addressLine2 ? ` ${order.buyer.addressLine2}` : ''}`;
+  const [tracking, setTracking] = useState(order.trackingNumber || '');
+  const [saving, setSaving] = useState(false);
+  const [error, setError] = useState('');
+  const shipped = Boolean(order.shippedAt);
+
+  const patchOrder = async (body: { shipped?: boolean; trackingNumber?: string | null }) => {
+    setSaving(true);
+    setError('');
+    const response = await fetch(`/api/admin/orders/${order.id}`, {
+      method: 'PATCH',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify(body),
+    });
+    const result = await response.json() as { order?: AdminOrder; error?: string };
+    if (!response.ok || !result.order) {
+      setError(result.error || '更新できませんでした。');
+      setSaving(false);
+      return;
+    }
+    updated(result.order);
+    setSaving(false);
+  };
+
   return <div className="drawer-layer"><button className="drawer-scrim" aria-label="詳細を閉じる" onClick={close} /><aside className="order-drawer">
     <header><div><p className="admin-kicker">Order detail</p><h2>#{order.id.slice(0, 8).toUpperCase()}</h2></div><button aria-label="閉じる" onClick={close}><X size={20} /></button></header>
     <div className="drawer-status"><StatusBadge status={order.status} /><span>{new Intl.DateTimeFormat('ja-JP', { dateStyle: 'long', timeStyle: 'short' }).format(new Date(order.createdAt))}</span></div>
     <section><h3>商品</h3><div className="drawer-product"><div className="drawer-product-icon"><ShoppingBag size={19} /></div><div><strong>{order.productName}</strong><span>数量 {order.quantity}</span></div><strong>{formatYen(order.totalAmount)}</strong></div></section>
     <section><h3>お客様</h3><dl><div><dt>お名前</dt><dd>{order.buyer.familyName} {order.buyer.givenName}</dd></div><div><dt>メール</dt><dd><a href={`mailto:${order.buyer.email}`}>{order.buyer.email}</a></dd></div><div><dt>電話番号</dt><dd>{order.buyer.phone}</dd></div></dl></section>
     <section><h3>お届け先</h3><p className="drawer-address">{address}</p></section>
+    <section className="drawer-fulfillment">
+      <h3>発送</h3>
+      <div className="fulfillment-state">
+        <span className={shipped ? 'shipped' : ''}><Truck size={14} />{shipped ? `発送済み · ${new Intl.DateTimeFormat('ja-JP', { dateStyle: 'medium', timeStyle: 'short' }).format(new Date(order.shippedAt!))}` : '未発送'}</span>
+        <button
+          type="button"
+          disabled={saving || (!shipped && order.status !== 'paid')}
+          onClick={() => void patchOrder({ shipped: !shipped, trackingNumber: shipped ? undefined : tracking.trim() || null })}
+        >
+          {saving ? <LoaderCircle className="spin" size={14} /> : shipped ? '未発送に戻す' : '発送済みにする'}
+        </button>
+      </div>
+      <label className="tracking-field">
+        <span>追跡番号</span>
+        <input value={tracking} onChange={(event) => setTracking(event.target.value)} placeholder="1234-5678-9012" maxLength={120} />
+        <button type="button" disabled={saving || tracking.trim() === (order.trackingNumber || '')} onClick={() => void patchOrder({ trackingNumber: tracking.trim() || null })}>保存</button>
+      </label>
+      {!shipped && order.status !== 'paid' && <p className="fulfillment-hint">決済が完了した注文のみ発送済みにできます。</p>}
+      {error && <p className="fulfillment-error">{error}</p>}
+    </section>
     <section><h3>決済情報</h3><dl><div><dt>商品小計</dt><dd>{formatYen(order.unitAmount * order.quantity)}</dd></div><div><dt>送料</dt><dd>{order.shippingAmount ? formatYen(order.shippingAmount) : '無料'}</dd></div><div className="drawer-total"><dt>合計</dt><dd>{formatYen(order.totalAmount)}</dd></div></dl>{order.paymentSessionId && <code className="session-code">{order.paymentSessionId}</code>}</section>
   </aside></div>;
 }

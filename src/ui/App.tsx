@@ -4,6 +4,8 @@ import {
   ArrowRight,
   Check,
   ChevronDown,
+  Info,
+  LoaderCircle,
   LockKeyhole,
   Minus,
   Plus,
@@ -50,18 +52,9 @@ type StorefrontProduct = {
   available: boolean;
 };
 
-const defaultStoreProduct: StorefrontProduct = {
-  id: 'legacy-default',
-  sku: 'default-product',
-  name: orderSpec.product.name,
-  edition: orderSpec.product.edition,
-  description: orderSpec.product.description,
-  unitAmount: orderSpec.product.unitAmount,
-  currency: orderSpec.product.currency,
-  shippingAmount: orderSpec.shippingAmount,
-  imageUrl: orderSpec.product.image,
-  available: true,
-};
+type CatalogState = 'loading' | 'ready' | 'empty' | 'unavailable';
+
+const draftKey = 'nano-checkout-draft';
 
 const prefectures = [
   '北海道', '青森県', '岩手県', '宮城県', '秋田県', '山形県', '福島県', '茨城県',
@@ -72,6 +65,20 @@ const prefectures = [
   '佐賀県', '長崎県', '熊本県', '大分県', '宮崎県', '鹿児島県', '沖縄県',
 ];
 
+function readCancelledDraft(): { form: CheckoutForm; quantity: number } | null {
+  if (new URLSearchParams(window.location.search).get('payment') !== 'cancelled') return null;
+  try {
+    const stored = window.sessionStorage.getItem(draftKey);
+    window.sessionStorage.removeItem(draftKey);
+    if (!stored) return null;
+    const parsed = JSON.parse(stored) as { form?: Partial<CheckoutForm>; quantity?: number };
+    if (!parsed.form) return null;
+    return { form: { ...initialForm, ...parsed.form }, quantity: parsed.quantity || 1 };
+  } catch {
+    return null;
+  }
+}
+
 export function App() {
   if (window.location.pathname.startsWith('/admin')) return <AdminApp />;
   const isSuccess = window.location.pathname.startsWith('/success');
@@ -80,14 +87,18 @@ export function App() {
 }
 
 function CheckoutView() {
-  const [form, setForm] = useState(initialForm);
-  const [quantity, setQuantity] = useState(1);
+  const restored = useMemo(readCancelledDraft, []);
+  const [form, setForm] = useState(restored?.form || initialForm);
+  const [quantity, setQuantity] = useState(restored?.quantity || 1);
+  const [cancelled, setCancelled] = useState(() => new URLSearchParams(window.location.search).get('payment') === 'cancelled');
   const [accepted, setAccepted] = useState(false);
-  const [product, setProduct] = useState(defaultStoreProduct);
+  const [product, setProduct] = useState<StorefrontProduct | null>(null);
+  const [catalog, setCatalog] = useState<CatalogState>('loading');
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState('');
-  const subtotal = useMemo(() => product.unitAmount * quantity, [product.unitAmount, quantity]);
-  const total = subtotal + product.shippingAmount;
+  const subtotal = (product?.unitAmount || 0) * quantity;
+  const total = subtotal + (product?.shippingAmount || 0);
+  const purchasable = Boolean(product?.available) && catalog === 'ready';
 
   useEffect(() => {
     const sku = new URLSearchParams(window.location.search).get('product');
@@ -99,20 +110,14 @@ function CheckoutView() {
       })
       .then((result) => {
         const selected = result.product || result.products?.[0];
-        if (selected) setProduct(selected);
-      })
-      .catch(() => {
-        if (sku) {
-          setProduct({
-            ...defaultStoreProduct,
-            sku,
-            name: '現在購入できません',
-            edition: 'Unavailable',
-            description: '指定された商品は、販売を終了したか一時的に非公開になっています。',
-            available: false,
-          });
+        if (!selected) {
+          setCatalog('empty');
+          return;
         }
-      });
+        setProduct(selected);
+        setCatalog('ready');
+      })
+      .catch(() => setCatalog(sku ? 'unavailable' : 'empty'));
   }, []);
 
   const update = (field: keyof CheckoutForm, value: string) => {
@@ -121,9 +126,10 @@ function CheckoutView() {
 
   const submit = async (event: FormEvent) => {
     event.preventDefault();
-    if (!accepted || submitting) return;
+    if (!accepted || submitting || !product || !purchasable) return;
     setSubmitting(true);
     setError('');
+    setCancelled(false);
 
     try {
       const response = await fetch('/api/orders', {
@@ -138,11 +144,23 @@ function CheckoutView() {
       if (!response.ok || !result.checkoutUrl) {
         throw new Error(result.error || '決済を開始できませんでした。');
       }
+      try {
+        window.sessionStorage.setItem(draftKey, JSON.stringify({ form, quantity }));
+      } catch {
+        // Restoring the form after a cancelled payment is a convenience only.
+      }
       window.location.assign(result.checkoutUrl);
     } catch (caught) {
       setError(caught instanceof Error ? caught.message : '通信エラーが発生しました。');
       setSubmitting(false);
     }
+  };
+
+  const payLabel = () => {
+    if (catalog === 'loading') return '商品を読み込んでいます…';
+    if (!purchasable) return '現在ご購入いただけません';
+    if (submitting) return '安全な決済画面へ移動中…';
+    return `${formatYen(total)} を支払う`;
   };
 
   return (
@@ -160,6 +178,13 @@ function CheckoutView() {
           <div className="eyebrow"><span>Checkout</span><span className="line" /></div>
           <h1>お届け先と<br />お支払い</h1>
           <p className="lead">必要な情報を入力してください。次の画面で安全にカード決済を行います。</p>
+
+          {cancelled && (
+            <p className="checkout-notice" role="status">
+              <Info size={15} />
+              お支払いは完了していません。入力内容はそのままですので、続けてお手続きいただけます。
+            </p>
+          )}
 
           <form onSubmit={submit}>
             <fieldset>
@@ -228,9 +253,9 @@ function CheckoutView() {
             </label>
 
             {error && <p className="form-error" role="alert">{error}</p>}
-            <button className="pay-button" type="submit" disabled={!accepted || submitting || !product.available}>
-              <span>{!product.available ? '現在売り切れです' : submitting ? '安全な決済画面へ移動中…' : `${formatYen(total)} を支払う`}</span>
-              {!submitting && <ArrowRight size={19} />}
+            <button className="pay-button" type="submit" disabled={!accepted || submitting || !purchasable}>
+              <span>{payLabel()}</span>
+              {!submitting && purchasable && <ArrowRight size={19} />}
             </button>
             <p className="payment-note"><ShieldCheck size={16} /> カード情報は当サイトに保存されません。決済は Stripe が安全に処理します。</p>
           </form>
@@ -238,39 +263,55 @@ function CheckoutView() {
 
         <aside className="summary-column">
           <div className="summary-sticky">
-            <div className="product-image-wrap">
-              <img src={product.imageUrl} alt={product.name} />
-              <span className="edition-pill">{product.edition}</span>
-            </div>
-            <div className="product-heading">
-              <div>
-                <p>Edition 01</p>
-                <h2>{product.name}</h2>
+            {catalog === 'loading' && (
+              <div className="summary-placeholder"><LoaderCircle className="spin" size={20} /><p>商品を読み込んでいます…</p></div>
+            )}
+
+            {(catalog === 'empty' || catalog === 'unavailable') && (
+              <div className="summary-placeholder">
+                <Info size={20} />
+                <p>{catalog === 'unavailable' ? '指定された商品は、販売を終了したか一時的に非公開になっています。' : '現在販売中の商品はありません。'}</p>
+                <a href={`mailto:${orderSpec.legal.contact}`}>お問い合わせ</a>
               </div>
-              <span>{formatYen(product.unitAmount)}</span>
-            </div>
-            <p className="product-description">{product.description}</p>
-            <div className="quantity-row">
-              <span>数量</span>
-              <div className="quantity-control">
-                <button type="button" aria-label="数量を減らす" onClick={() => setQuantity((value) => Math.max(1, value - 1))} disabled={quantity === 1}><Minus size={14} /></button>
-                <span>{quantity}</span>
-                <button type="button" aria-label="数量を増やす" onClick={() => setQuantity((value) => Math.min(5, value + 1))} disabled={quantity === 5}><Plus size={14} /></button>
-              </div>
-            </div>
-            <div className="totals">
-              <div><span>小計</span><span>{formatYen(subtotal)}</span></div>
-              <div><span>送料</span><span>{product.shippingAmount ? formatYen(product.shippingAmount) : '無料'}</span></div>
-              <div className="total"><span>合計 <small>税込</small></span><strong>{formatYen(total)}</strong></div>
-            </div>
-            <div className="promise"><Sparkles size={17} /><span><strong>小さく、長く使えるもの。</strong>ひとつずつ検品してお届けします。</span></div>
+            )}
+
+            {catalog === 'ready' && product && (
+              <>
+                <div className="product-image-wrap">
+                  <img src={product.imageUrl} alt={product.name} />
+                  {product.edition && <span className="edition-pill">{product.edition}</span>}
+                </div>
+                <div className="product-heading">
+                  <div>
+                    <p>{product.edition || 'Product'}</p>
+                    <h2>{product.name}</h2>
+                  </div>
+                  <span>{formatYen(product.unitAmount)}</span>
+                </div>
+                <p className="product-description">{product.description}</p>
+                <div className="quantity-row">
+                  <span>数量</span>
+                  <div className="quantity-control">
+                    <button type="button" aria-label="数量を減らす" onClick={() => setQuantity((value) => Math.max(1, value - 1))} disabled={quantity === 1}><Minus size={14} /></button>
+                    <span>{quantity}</span>
+                    <button type="button" aria-label="数量を増やす" onClick={() => setQuantity((value) => Math.min(5, value + 1))} disabled={quantity === 5}><Plus size={14} /></button>
+                  </div>
+                </div>
+                <div className="totals">
+                  <div><span>小計</span><span>{formatYen(subtotal)}</span></div>
+                  <div><span>送料</span><span>{product.shippingAmount ? formatYen(product.shippingAmount) : '無料'}</span></div>
+                  <div className="total"><span>合計 <small>税込</small></span><strong>{formatYen(total)}</strong></div>
+                </div>
+                <div className="promise"><Sparkles size={17} /><span><strong>小さく、長く使えるもの。</strong>ひとつずつ検品してお届けします。</span></div>
+              </>
+            )}
           </div>
         </aside>
       </div>
 
       <footer>
         <span>© 2026 {orderSpec.storeName}</span>
-        <nav><a href="/confirm/">販売条件</a><a href={`mailto:${orderSpec.legal.contact}`}>お問い合わせ</a></nav>
+        <nav><a href="/confirm/">特定商取引法に基づく表記</a><a href={`mailto:${orderSpec.legal.contact}`}>お問い合わせ</a></nav>
         <span className="powered">Checkout by <strong>Nano</strong></span>
       </footer>
     </main>
@@ -286,7 +327,16 @@ function SuccessView() {
         <div className="success-icon"><Check size={32} /></div>
         <p className="eyebrow-text">Order confirmed</p>
         <h1>{isDemo ? 'デモ注文を受け付けました。' : 'ご注文ありがとうございます。'}</h1>
-        <p>{isDemo ? 'Stripe のキーを設定すると、ここまでの流れを実際のテスト決済に切り替えられます。' : '確認メールをお送りしました。商品の発送まで、もうしばらくお待ちください。'}</p>
+        <p>
+          {isDemo
+            ? 'Stripe のキーを設定すると、ここまでの流れを実際のテスト決済に切り替えられます。'
+            : 'お支払いが完了しました。発送の準備が整いましたら、ご登録のメールアドレスへご連絡します。'}
+        </p>
+        {!isDemo && (
+          <p className="success-contact">
+            ご不明な点は <a href={`mailto:${orderSpec.legal.contact}`}>{orderSpec.legal.contact}</a> までお問い合わせください。
+          </p>
+        )}
         <a className="back-link" href="/"><ArrowLeft size={17} /> ストアへ戻る</a>
       </section>
     </main>
