@@ -1,0 +1,9 @@
+name = "nano-checkout"
+compatibility_date = "2026-08-30"
+pages_build_output_dir = "./dist"
+
+# Create the binding with `wrangler hyperdrive create`, then uncomment and
+# replace the id. Keeping it out of source avoids committing account details.
+# [[hyperdrive]]
+# binding = "HYPERDRIVE"
+# id = "YOUR_HYPERDRIVE_ID"

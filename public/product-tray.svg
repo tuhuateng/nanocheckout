@@ -1,0 +1,14 @@
+<svg width="960" height="760" viewBox="0 0 960 760" fill="none" xmlns="http://www.w3.org/2000/svg">
+  <rect width="960" height="760" fill="#DDD7C9"/>
+  <ellipse cx="489" cy="605" rx="330" ry="62" fill="#AAA18D" fill-opacity=".35"/>
+  <path d="M185 255C185 213 219 179 261 179H699C741 179 775 213 775 255V501C775 555 731 599 677 599H283C229 599 185 555 185 501V255Z" fill="#B86543"/>
+  <path d="M220 270C220 239 245 214 276 214H684C715 214 740 239 740 270V475C740 524 700 564 651 564H309C260 564 220 524 220 475V270Z" fill="#D47D58"/>
+  <path d="M244 294C244 263 269 238 300 238H660C691 238 716 263 716 294V444C716 491 678 529 631 529H329C282 529 244 491 244 444V294Z" fill="#B96748"/>
+  <ellipse cx="383" cy="383" rx="72" ry="73" fill="#EEE9DC"/>
+  <ellipse cx="383" cy="383" rx="46" ry="47" fill="#D1C7B3"/>
+  <rect x="492" y="300" width="139" height="198" rx="31" transform="rotate(9 492 300)" fill="#2D3430"/>
+  <rect x="508" y="319" width="107" height="158" rx="20" transform="rotate(9 508 319)" fill="#55605A"/>
+  <circle cx="601" cy="326" r="8" fill="#B9C2BB"/>
+  <path d="M0 96C238 18 394 171 590 94C722 42 820 37 960 81V0H0V96Z" fill="#EFECE4" fill-opacity=".42"/>
+  <text x="48" y="693" fill="#5F584C" font-family="Arial, sans-serif" font-size="18" letter-spacing="4">KINU OBJECTS — EDITION 01</text>
+</svg>
