@@ -43,11 +43,7 @@ const html = `<!doctype html>
     <header class="header"><span class="brand">${escapeHtml(orderSpec.storeName)}</span><a class="back" href="/">← チェックアウトへ戻る</a></header>
     <section class="intro"><span class="eyebrow">Terms of sale</span><h1>特定商取引法に<br>基づく表記</h1><p>ご注文前に、以下の販売条件をご確認ください。商品ごとの価格と送料は、各商品ページおよび注文画面に表示されます。</p></section>
     <dl class="terms">${rows.map(([term, detail]) => `<div class="row"><dt>${escapeHtml(term)}</dt><dd>${escapeHtml(detail)}</dd></div>`).join('')}</dl>
-    <section class="seller">
-      <h2>販売事業者について</h2>
-      <dl>${sellerRows.map(([term, detail]) => `<div><dt>${escapeHtml(term)}</dt><dd>${escapeHtml(detail)}</dd></div>`).join('')}
-      <div><dt>メール</dt><dd><a href="mailto:${escapeHtml(orderSpec.legal.contact)}">${escapeHtml(orderSpec.legal.contact)}</a></dd></div></dl>
-    </section>
+    <section class="seller"><h2>販売事業者について</h2><dl>${sellerRows.map(([term, detail]) => `<div><dt>${escapeHtml(term)}</dt><dd>${escapeHtml(detail)}</dd></div>`).join('')}<div><dt>メール</dt><dd><a href="mailto:${escapeHtml(orderSpec.legal.contact)}">${escapeHtml(orderSpec.legal.contact)}</a></dd></div></dl></section>
     <p class="note">このページは OrderSpec からビルド時に生成された静的ページです。購入者の入力情報は含まれません。</p>
   </main>
 </body>

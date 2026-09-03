@@ -227,8 +227,7 @@ function AdminDashboard({ onLogout }: { onLogout: () => void }) {
 
   useEffect(() => { void loadSummary(); }, [loadSummary]);
 
-  // Names live inside the encrypted payload, so only email addresses and order
-  // ids can be searched on the server. Anything else filters the loaded page.
+  // Names are encrypted, so only emails and order ids can be searched server side.
   useEffect(() => {
     const query = search.trim();
     const serverSearchable = query.includes('@') || /^[0-9a-f-]{4,}$/i.test(query);

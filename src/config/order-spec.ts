@@ -1,10 +1,7 @@
 export type OrderSpec = {
   storeName: string;
   storeMark: string;
-  /**
-   * Shape of the Stripe line item. The values below are defaults only. Every
-   * order overwrites them with the product row loaded from the database.
-   */
+  // Stripe line item shape. Every order overwrites this with its product row.
   product: {
     name: string;
     edition: string;
@@ -14,12 +11,8 @@ export type OrderSpec = {
     image: string;
   };
   shippingAmount: number;
-  /**
-   * Content of the static /confirm/ page. In Japan the Act on Specified
-   * Commercial Transactions requires the seller name, the person in charge,
-   * the address and a phone number to be published. Replace every placeholder
-   * with the details of the business that actually sells the goods.
-   */
+  // Rendered into /confirm/. The seller details are placeholders and must be
+  // replaced with the real business before selling anything.
   legal: {
     price: string;
     quantity: string;

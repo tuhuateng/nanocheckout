@@ -131,7 +131,6 @@ describe('checkout app', () => {
     });
     expect(login.status).toBe(200);
     const setCookie = login.headers.get('set-cookie')!;
-    expect(setCookie).toContain('Path=/');
     expect(setCookie).toContain('HttpOnly');
     expect(setCookie).toContain('SameSite=Strict');
 

@@ -72,7 +72,6 @@ function readCancelledDraft(): { form: CheckoutForm; quantity: number } | null {
     window.sessionStorage.removeItem(draftKey);
     if (!stored) return null;
     const parsed = JSON.parse(stored) as { form?: Partial<CheckoutForm>; quantity?: number };
-    if (!parsed.form) return null;
     return { form: { ...initialForm, ...parsed.form }, quantity: parsed.quantity || 1 };
   } catch {
     return null;
@@ -147,20 +146,13 @@ function CheckoutView() {
       try {
         window.sessionStorage.setItem(draftKey, JSON.stringify({ form, quantity }));
       } catch {
-        // Restoring the form after a cancelled payment is a convenience only.
+        // Storage is unavailable; the buyer just retypes the address if they come back.
       }
       window.location.assign(result.checkoutUrl);
     } catch (caught) {
       setError(caught instanceof Error ? caught.message : '通信エラーが発生しました。');
       setSubmitting(false);
     }
-  };
-
-  const payLabel = () => {
-    if (catalog === 'loading') return '商品を読み込んでいます…';
-    if (!purchasable) return '現在ご購入いただけません';
-    if (submitting) return '安全な決済画面へ移動中…';
-    return `${formatYen(total)} を支払う`;
   };
 
   return (
@@ -254,7 +246,7 @@ function CheckoutView() {
 
             {error && <p className="form-error" role="alert">{error}</p>}
             <button className="pay-button" type="submit" disabled={!accepted || submitting || !purchasable}>
-              <span>{payLabel()}</span>
+              <span>{catalog === 'loading' ? '商品を読み込んでいます…' : !purchasable ? '現在ご購入いただけません' : submitting ? '安全な決済画面へ移動中…' : `${formatYen(total)} を支払う`}</span>
               {!submitting && purchasable && <ArrowRight size={19} />}
             </button>
             <p className="payment-note"><ShieldCheck size={16} /> カード情報は当サイトに保存されません。決済は Stripe が安全に処理します。</p>

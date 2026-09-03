@@ -5,7 +5,7 @@ import { z } from 'zod';
 import type { OrderSpec } from '../config/order-spec';
 import { createAdminSession, verifyAdminPassword, verifyAdminSession } from './admin-auth';
 import { createLookupDigest, decryptPii, encryptPii } from './crypto';
-import { ProductUnavailableError, type AdminOrderRecord, type CheckoutDatabase, type CheckoutSecrets, type OrderStatus, type ProductInput, type ProductRecord, type StripeLike } from './types';
+import { ProductUnavailableError, type AdminOrderRecord, type CheckoutDatabase, type CheckoutSecrets, type FulfillmentPatch, type OrderStatus, type ProductInput, type ProductRecord, type StripeLike } from './types';
 
 const checkoutSchema = z.object({
   email: z.email().max(254),
@@ -186,10 +186,10 @@ export function createCheckoutApp(deps: CheckoutAppDependencies) {
       return context.json({ error: '決済が完了した注文のみ発送済みにできます。' }, 409);
     }
 
-    const updated = await deps.db.updateFulfillment(orderId, {
-      ...(patch.shipped === undefined ? {} : { shippedAt: patch.shipped ? new Date() : null }),
-      ...(patch.trackingNumber === undefined ? {} : { trackingNumber: patch.trackingNumber || null }),
-    });
+    const fulfillment: FulfillmentPatch = {};
+    if (patch.shipped !== undefined) fulfillment.shippedAt = patch.shipped ? new Date() : null;
+    if (patch.trackingNumber !== undefined) fulfillment.trackingNumber = patch.trackingNumber || null;
+    const updated = await deps.db.updateFulfillment(orderId, fulfillment);
     if (!updated) return context.json({ error: 'Order not found' }, 404);
     return context.json({ order: await toAdminResponse(updated) });
   });
