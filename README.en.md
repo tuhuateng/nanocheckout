@@ -75,23 +75,6 @@ Shipping progress is recorded from the order detail drawer:
 
 Buyer names are stored encrypted and cannot be queried in the database. The search box sends email addresses and order ids to the server and filters names within the loaded page.
 
-## Running the store from an AI (MCP)
-
-Connect Claude, or any other MCP client, straight to the merchant tools to check sales, change prices and inventory, and record shipments in conversation.
-
-Setting `MCP_TOKEN` enables `POST /api/mcp`. Without it that URL returns 404 and the feature is off entirely.
-
-```bash
-claude mcp add --transport http nano-checkout https://shop.example.com/api/mcp \
-  --header "Authorization: Bearer $MCP_TOKEN"
-```
-
-Eight tools are exposed: sales summary, order list, order lookup by email, order detail, product list, create product, update product, and record shipment. Creating orders, refunds and deletions are deliberately left out, so an AI on this connection cannot charge a card or remove anything irreversibly. The writing tools share their validation schema with the admin REST API.
-
-Buyer details are redacted by default: family name, a masked email address, and the prefecture. Set `MCP_ALLOW_PII=true` when the AI genuinely needs full shipping details, knowing that addresses and phone numbers then enter the AI vendor's context and logs.
-
-The protocol details and the full tool reference are in section 11 of [docs/API.md](docs/API.md) (Chinese).
-
 ### Product management
 
 The "Products" section of the admin panel supports:
@@ -129,6 +112,23 @@ On the web, `/?product=SKU` previews a specific product. iOS, Android and LINE c
 
 The server looks up the price by SKU and reserves inventory. Any amount sent by the client is ignored. Inventory is released automatically when Stripe Session creation fails or the session expires.
 
+## Running the store from an AI (MCP)
+
+Connect Claude, or any other MCP client, straight to the merchant tools to check sales, change prices and inventory, and record shipments in conversation.
+
+Setting `MCP_TOKEN` enables `POST /api/mcp`. Without it that URL returns 404 and the feature is off entirely.
+
+```bash
+claude mcp add --transport http nano-checkout https://shop.example.com/api/mcp \
+  --header "Authorization: Bearer $MCP_TOKEN"
+```
+
+Eight tools are exposed: sales summary, order list, order lookup by email, order detail, product list, create product, update product, and record shipment. Creating orders, refunds and deletions are deliberately left out, so an AI on this connection cannot charge a card or remove anything irreversibly. The writing tools share their validation schema with the admin REST API.
+
+Buyer details are redacted by default: family name, a masked email address, and the prefecture. Set `MCP_ALLOW_PII=true` when the AI genuinely needs full shipping details, knowing that addresses and phone numbers then enter the AI vendor's context and logs.
+
+The protocol details and the full tool reference are in section 11 of [docs/API.md](docs/API.md) (Chinese).
+
 ## Vercel / Netlify
 
 Both set `DATABASE_URL` to a pooled Postgres connection string. Vercel loads `api/index.ts` and Netlify loads `netlify/functions/checkout.ts`; both call the same `createCheckoutApp()`.
@@ -154,3 +154,9 @@ npm test           # unit and API tests
 npm run build      # Vite build + static confirmation page
 npm run cf:dev     # run Cloudflare Pages locally
 ```
+
+## License
+
+Apache License 2.0. Copyright 2026 株式会社MIIMOO.
+
+Commercial use, modification and redistribution are permitted. Ship `LICENSE` and `NOTICE` with any distribution and state the changes you made. The license grants no rights to the "MIIMOO" or "株式会社MIIMOO" names and trademarks.

@@ -75,23 +75,6 @@ npm run dev
 
 購入者の氏名は暗号化して保存しているためデータベース側では検索できません。検索ボックスはメールアドレスと注文 ID をサーバーで検索し、氏名は読み込み済みの一覧に対して絞り込みます。
 
-## AI から店舗を操作する（MCP）
-
-Claude などの MCP クライアントを管理機能に直接つなぎ、売上の確認、価格や在庫の変更、発送の記録を会話で行えます。
-
-`MCP_TOKEN` を設定すると `POST /api/mcp` が有効になります。未設定の場合この URL は 404 を返し、機能ごと無効です。
-
-```bash
-claude mcp add --transport http nano-checkout https://shop.example.com/api/mcp \
-  --header "Authorization: Bearer $MCP_TOKEN"
-```
-
-公開しているツールは 8 つです。売上サマリー、注文一覧、メールでの注文検索、注文詳細、商品一覧、商品の作成、商品の更新、発送の記録。注文作成、返金、削除は意図的に含めていません。AI がこの接続から課金や取り消せない削除を行うことはありません。書き込み系ツールは管理者 REST API と同じ検証スキーマを共有します。
-
-購入者情報は既定で伏せ字にし、姓、マスクしたメールアドレス、都道府県のみを返します。AI に完全な配送先を渡す必要がある場合は `MCP_ALLOW_PII=true` を設定します。住所と電話番号が AI 側の文脈とログに渡ることを理解した上で有効にしてください。
-
-プロトコルの詳細と全ツールの仕様は [API ドキュメント](docs/API.md) の第 11 章にあります。
-
 ### 商品管理
 
 管理画面の「商品管理」では次を行えます。
@@ -129,6 +112,23 @@ Web では `/?product=SKU` で指定商品をプレビューできます。iOS�
 
 サーバーは SKU から価格を取得して在庫を確保し、クライアントが送る金額は使用しません。Stripe Session の作成に失敗した場合や期限切れの場合は在庫を自動で戻します。
 
+## AI から店舗を操作する（MCP）
+
+Claude などの MCP クライアントを管理機能に直接つなぎ、売上の確認、価格や在庫の変更、発送の記録を会話で行えます。
+
+`MCP_TOKEN` を設定すると `POST /api/mcp` が有効になります。未設定の場合この URL は 404 を返し、機能ごと無効です。
+
+```bash
+claude mcp add --transport http nano-checkout https://shop.example.com/api/mcp \
+  --header "Authorization: Bearer $MCP_TOKEN"
+```
+
+公開しているツールは 8 つです。売上サマリー、注文一覧、メールでの注文検索、注文詳細、商品一覧、商品の作成、商品の更新、発送の記録。注文作成、返金、削除は意図的に含めていません。AI がこの接続から課金や取り消せない削除を行うことはありません。書き込み系ツールは管理者 REST API と同じ検証スキーマを共有します。
+
+購入者情報は既定で伏せ字にし、姓、マスクしたメールアドレス、都道府県のみを返します。AI に完全な配送先を渡す必要がある場合は `MCP_ALLOW_PII=true` を設定します。住所と電話番号が AI 側の文脈とログに渡ることを理解した上で有効にしてください。
+
+プロトコルの詳細と全ツールの仕様は [API ドキュメント](docs/API.md) の第 11 章にあります。
+
 ## Vercel / Netlify
 
 どちらも `DATABASE_URL` に Postgres の pooled connection string を設定します。Vercel は `api/index.ts`、Netlify は `netlify/functions/checkout.ts` が同じ `createCheckoutApp()` を読み込みます。
@@ -154,3 +154,9 @@ npm test           # 単体・API テスト
 npm run build      # Vite + 静的確認ページ
 npm run cf:dev     # Cloudflare Pages ローカル実行
 ```
+
+## ライセンス
+
+Apache License 2.0 で公開しています。Copyright 2026 株式会社MIIMOO。
+
+商用利用、改変、再配布ができます。配布する際は `LICENSE` と `NOTICE` を同梱し、変更した箇所を明示してください。本ライセンスは「MIIMOO」および「株式会社MIIMOO」の名称・商標の使用許諾を含みません。

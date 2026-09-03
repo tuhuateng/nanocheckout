@@ -3,6 +3,8 @@
   "version": "0.1.0",
   "private": true,
   "type": "module",
+  "license": "Apache-2.0",
+  "author": "株式会社MIIMOO",
   "scripts": {
     "dev": "concurrently -k -n web,api -c cyan,magenta \"vite\" \"tsx watch server/dev.ts\"",
     "build": "vite build && tsx scripts/prerender-confirm.ts",

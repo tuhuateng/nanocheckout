@@ -75,23 +75,6 @@ npm run dev
 
 购买者姓名以加密形式存储，数据库无法直接检索。搜索框对邮箱和订单 ID 走服务端查询，对姓名则在已加载的订单中本地过滤。
 
-## 让 AI 直接操作店铺（MCP）
-
-可以把 Claude 这类 MCP 客户端接到后台，用对话查销售、改价格库存、记录发货。
-
-设置 `MCP_TOKEN` 后 `POST /api/mcp` 生效；不设置时该地址返回 404，功能整体关闭。
-
-```bash
-claude mcp add --transport http nano-checkout https://shop.example.com/api/mcp \
-  --header "Authorization: Bearer $MCP_TOKEN"
-```
-
-一共开放 8 个工具：销售概要、订单列表、按邮箱查订单、订单详情、商品列表、创建商品、更新商品、记录发货。创建订单、退款、删除数据都刻意没有开放，AI 无法通过这个接口产生扣款或不可逆的删除。写入类工具与管理员 REST 接口共用同一份校验 schema。
-
-购买者信息默认脱敏，只返回姓氏、掩码邮箱和都道府县。确实需要让 AI 看到完整收件信息时，设置 `MCP_ALLOW_PII=true`。开启前请清楚：地址和电话会进入 AI 服务商的上下文和日志。
-
-协议细节和完整工具说明见 [API 接口文档](docs/API.md) 第 11 章。
-
 ### 商品管理
 
 后台的「商品管理」支持：
@@ -129,6 +112,23 @@ Web 可通过 `/?product=SKU` 预览指定商品；iOS、Android 和 LINE 也使
 
 服务端根据 SKU 查询价格并预留库存，不采用客户端提交的金额。Stripe Session 创建失败或过期时会自动归还库存。
 
+## 让 AI 直接操作店铺（MCP）
+
+可以把 Claude 这类 MCP 客户端接到后台，用对话查销售、改价格库存、记录发货。
+
+设置 `MCP_TOKEN` 后 `POST /api/mcp` 生效；不设置时该地址返回 404，功能整体关闭。
+
+```bash
+claude mcp add --transport http nano-checkout https://shop.example.com/api/mcp \
+  --header "Authorization: Bearer $MCP_TOKEN"
+```
+
+一共开放 8 个工具：销售概要、订单列表、按邮箱查订单、订单详情、商品列表、创建商品、更新商品、记录发货。创建订单、退款、删除数据都刻意没有开放，AI 无法通过这个接口产生扣款或不可逆的删除。写入类工具与管理员 REST 接口共用同一份校验 schema。
+
+购买者信息默认脱敏，只返回姓氏、掩码邮箱和都道府县。确实需要让 AI 看到完整收件信息时，设置 `MCP_ALLOW_PII=true`。开启前请清楚：地址和电话会进入 AI 服务商的上下文和日志。
+
+协议细节和完整工具说明见 [API 接口文档](docs/API.md) 第 11 章。
+
 ## Vercel / Netlify
 
 两者都把 `DATABASE_URL` 设为 Postgres 的 pooled connection string。Vercel 由 `api/index.ts`、Netlify 由 `netlify/functions/checkout.ts` 加载同一个 `createCheckoutApp()`。
@@ -154,3 +154,9 @@ npm test           # 单元测试与 API 测试
 npm run build      # Vite 构建 + 静态确认页
 npm run cf:dev     # 本地运行 Cloudflare Pages
 ```
+
+## 许可证
+
+以 Apache License 2.0 开源，Copyright 2026 株式会社MIIMOO。
+
+可以商用、修改、再分发。分发时请一并附上 `LICENSE` 和 `NOTICE`，并注明你所做的改动。本协议不授予「MIIMOO」「株式会社MIIMOO」名称与商标的使用权。
