@@ -691,3 +691,94 @@ Content-Type: application/json
 - `checkoutUrl` 是短期支付入口，客户端不应缓存或共享。
 - 前端跳转成功不等于最终入账；订单履约应以后台收到的 Stripe Webhook 状态为准。
 
+## 11. MCP 接口（AI 直连）
+
+店铺可以把 Claude 这类 AI 客户端直接接到后台，用自然语言查销售、改商品、记发货。接口是一个符合 MCP 规范的 Streamable HTTP 端点，和 API 部署在一起。
+
+```http
+POST /api/mcp
+Authorization: Bearer <MCP_TOKEN>
+Content-Type: application/json
+```
+
+未设置 `MCP_TOKEN` 时该端点返回 `404`，即完全关闭。token 少于 32 个字符时服务拒绝启动。token 错误返回 `401` 并带 `WWW-Authenticate: Bearer`。
+
+传输层实现的是无状态的 Streamable HTTP：单条 JSON-RPC 2.0 请求走 POST，响应为 `application/json`；通知（无 `id`）返回 `202` 空响应；不使用 SSE，也不维护 `Mcp-Session-Id`。协议版本按客户端声明回显，支持 `2025-06-18`、`2025-03-26` 和 `2024-11-05`。
+
+### 11.1 支持的方法
+
+| 方法 | 说明 |
+| --- | --- |
+| `initialize` | 握手，返回协议版本、能力和 `serverInfo` |
+| `notifications/initialized` | 客户端握手完成通知，返回 `202` |
+| `ping` | 心跳，返回空结果 |
+| `tools/list` | 列出全部工具及其 JSON Schema |
+| `tools/call` | 调用工具 |
+
+未实现的方法返回 JSON-RPC 错误 `-32601`；工具名不存在返回 `-32602`。工具内部的业务错误不走 JSON-RPC 错误，而是返回 `isError: true` 的正常结果，便于 AI 读到原因后自行纠正。
+
+### 11.2 工具一览
+
+| 工具 | 只读 | 用途 |
+| --- | --- | --- |
+| `get_sales_summary` | 是 | 销售额、订单数、待处理和已支付数量 |
+| `list_orders` | 是 | 按时间倒序列出订单，可按支付状态筛选 |
+| `find_orders_by_email` | 是 | 按邮箱精确查找订单 |
+| `get_order` | 是 | 按订单 ID 读取单个订单 |
+| `list_products` | 是 | 列出商品，含价格、状态和库存 |
+| `create_product` | 否 | 创建商品 |
+| `update_product` | 否 | 修改价格、库存、说明或上下架状态 |
+| `mark_shipped` | 否 | 记录或取消发货，保存追踪号 |
+
+写入工具的校验规则与管理员 REST 接口共用同一份 schema，因此价格上限、SKU 格式、库存范围等约束完全一致。`mark_shipped` 同样只允许把 `paid` 的订单标为已发货。
+
+有意不提供的能力：创建订单、退款、删除数据。AI 无法通过这个接口产生扣款或不可逆的删除。
+
+### 11.3 个人信息
+
+订单类工具默认对购买者信息脱敏，只返回姓氏、掩码邮箱和都道府县，并附带 `piiRedacted: true`：
+
+```json
+{
+  "id": "98d865f6-0208-4712-8593-c70839c63a83",
+  "status": "paid",
+  "totalAmount": 4200,
+  "buyer": { "familyName": "山田", "email": "b***@example.com", "prefecture": "東京都" },
+  "piiRedacted": true
+}
+```
+
+需要 AI 读到完整收件信息（例如让它整理面单）时，设置环境变量 `MCP_ALLOW_PII=true`，订单工具改为返回与管理员接口一致的完整 `buyer` 对象。开启前请确认：这些地址和电话会进入 AI 服务商的上下文与日志。
+
+### 11.4 接入 Claude Code
+
+```bash
+claude mcp add --transport http nano-checkout https://shop.example.com/api/mcp \
+  --header "Authorization: Bearer $MCP_TOKEN"
+```
+
+或写进项目的 `.mcp.json`：
+
+```json
+{
+  "mcpServers": {
+    "nano-checkout": {
+      "type": "http",
+      "url": "https://shop.example.com/api/mcp",
+      "headers": { "Authorization": "Bearer ${MCP_TOKEN}" }
+    }
+  }
+}
+```
+
+本接口使用固定 bearer token，不实现 OAuth 2.1 授权流程。只支持 OAuth 的客户端无法直接连接。
+
+### 11.5 用 curl 验证
+
+```bash
+curl -X POST https://shop.example.com/api/mcp \
+  -H "Authorization: Bearer $MCP_TOKEN" \
+  -H 'Content-Type: application/json' \
+  -d '{"jsonrpc":"2.0","id":1,"method":"tools/list"}'
+```
+

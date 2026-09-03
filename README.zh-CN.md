@@ -33,6 +33,7 @@ npm run dev
 - `ADMIN_SESSION_SECRET` — 用 `openssl rand -hex 32` 生成（至少 32 个字符）。
 - `APP_URL` — 例如 `https://shop.example.com`
 - `DATABASE_URL` — 使用 Cloudflare Hyperdrive 时不需要。
+- `MCP_TOKEN` — 可选。设置后启用给 AI 用的 MCP 接口，用 `openssl rand -hex 32` 生成（至少 32 个字符）。
 
 建表方式二选一：在 SQL 编辑器中按编号顺序执行 `migrations/` 下的 SQL（`0000_checkout_orders.sql` → `0001_checkout_products.sql` → `0002_order_fulfillment.sql`），或设置 `DIRECT_URL` 后运行 `npm run db:push`。
 
@@ -73,6 +74,23 @@ npm run dev
 - 导出订单 CSV，带 UTF-8 BOM，Excel 打开日文不会乱码。
 
 购买者姓名以加密形式存储，数据库无法直接检索。搜索框对邮箱和订单 ID 走服务端查询，对姓名则在已加载的订单中本地过滤。
+
+## 让 AI 直接操作店铺（MCP）
+
+可以把 Claude 这类 MCP 客户端接到后台，用对话查销售、改价格库存、记录发货。
+
+设置 `MCP_TOKEN` 后 `POST /api/mcp` 生效；不设置时该地址返回 404，功能整体关闭。
+
+```bash
+claude mcp add --transport http nano-checkout https://shop.example.com/api/mcp \
+  --header "Authorization: Bearer $MCP_TOKEN"
+```
+
+一共开放 8 个工具：销售概要、订单列表、按邮箱查订单、订单详情、商品列表、创建商品、更新商品、记录发货。创建订单、退款、删除数据都刻意没有开放，AI 无法通过这个接口产生扣款或不可逆的删除。写入类工具与管理员 REST 接口共用同一份校验 schema。
+
+购买者信息默认脱敏，只返回姓氏、掩码邮箱和都道府县。确实需要让 AI 看到完整收件信息时，设置 `MCP_ALLOW_PII=true`。开启前请清楚：地址和电话会进入 AI 服务商的上下文和日志。
+
+协议细节和完整工具说明见 [API 接口文档](docs/API.md) 第 11 章。
 
 ### 商品管理
 

@@ -129,4 +129,5 @@ export type CheckoutSecrets = {
   webhookSecret: string;
   adminPasswordHash: string;
   adminSessionSecret: string;
+  mcpToken?: string;
 };

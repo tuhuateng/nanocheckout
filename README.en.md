@@ -33,6 +33,7 @@ See `.env.example` and register the following as secrets on your platform. Never
 - `ADMIN_SESSION_SECRET` — generate with `openssl rand -hex 32` (at least 32 characters).
 - `APP_URL` — e.g. `https://shop.example.com`
 - `DATABASE_URL` — not needed when using Cloudflare Hyperdrive.
+- `MCP_TOKEN` — optional. Setting it enables the MCP endpoint for AI clients. Generate with `openssl rand -hex 32` (at least 32 characters).
 
 Create the tables either by running the SQL files in `migrations/` in numeric order (`0000_checkout_orders.sql` → `0001_checkout_products.sql` → `0002_order_fulfillment.sql`) in a SQL editor, or by setting `DIRECT_URL` and running `npm run db:push`.
 
@@ -73,6 +74,23 @@ Shipping progress is recorded from the order detail drawer:
 - Export the order list as CSV, written with a UTF-8 BOM so Japanese text opens correctly in Excel.
 
 Buyer names are stored encrypted and cannot be queried in the database. The search box sends email addresses and order ids to the server and filters names within the loaded page.
+
+## Running the store from an AI (MCP)
+
+Connect Claude, or any other MCP client, straight to the merchant tools to check sales, change prices and inventory, and record shipments in conversation.
+
+Setting `MCP_TOKEN` enables `POST /api/mcp`. Without it that URL returns 404 and the feature is off entirely.
+
+```bash
+claude mcp add --transport http nano-checkout https://shop.example.com/api/mcp \
+  --header "Authorization: Bearer $MCP_TOKEN"
+```
+
+Eight tools are exposed: sales summary, order list, order lookup by email, order detail, product list, create product, update product, and record shipment. Creating orders, refunds and deletions are deliberately left out, so an AI on this connection cannot charge a card or remove anything irreversibly. The writing tools share their validation schema with the admin REST API.
+
+Buyer details are redacted by default: family name, a masked email address, and the prefecture. Set `MCP_ALLOW_PII=true` when the AI genuinely needs full shipping details, knowing that addresses and phone numbers then enter the AI vendor's context and logs.
+
+The protocol details and the full tool reference are in section 11 of [docs/API.md](docs/API.md) (Chinese).
 
 ### Product management
 

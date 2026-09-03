@@ -33,6 +33,7 @@ npm run dev
 - `ADMIN_SESSION_SECRET` — `openssl rand -hex 32` で生成（32 文字以上）。
 - `APP_URL` — 例: `https://shop.example.com`
 - `DATABASE_URL` — Cloudflare Hyperdrive を使う場合は不要。
+- `MCP_TOKEN` — 任意。設定すると AI 連携用の MCP エンドポイントが有効になります。`openssl rand -hex 32` で生成（32 文字以上）。
 
 テーブルは `migrations/` 内の SQL を番号順（`0000_checkout_orders.sql` → `0001_checkout_products.sql` → `0002_order_fulfillment.sql`）に SQL エディタで実行するか、`DIRECT_URL` を指定して `npm run db:push` で作成します。
 
@@ -73,6 +74,23 @@ npm run dev
 - 注文一覧を CSV で書き出せます。日本語が文字化けしないよう UTF-8 BOM 付きで出力します。
 
 購入者の氏名は暗号化して保存しているためデータベース側では検索できません。検索ボックスはメールアドレスと注文 ID をサーバーで検索し、氏名は読み込み済みの一覧に対して絞り込みます。
+
+## AI から店舗を操作する（MCP）
+
+Claude などの MCP クライアントを管理機能に直接つなぎ、売上の確認、価格や在庫の変更、発送の記録を会話で行えます。
+
+`MCP_TOKEN` を設定すると `POST /api/mcp` が有効になります。未設定の場合この URL は 404 を返し、機能ごと無効です。
+
+```bash
+claude mcp add --transport http nano-checkout https://shop.example.com/api/mcp \
+  --header "Authorization: Bearer $MCP_TOKEN"
+```
+
+公開しているツールは 8 つです。売上サマリー、注文一覧、メールでの注文検索、注文詳細、商品一覧、商品の作成、商品の更新、発送の記録。注文作成、返金、削除は意図的に含めていません。AI がこの接続から課金や取り消せない削除を行うことはありません。書き込み系ツールは管理者 REST API と同じ検証スキーマを共有します。
+
+購入者情報は既定で伏せ字にし、姓、マスクしたメールアドレス、都道府県のみを返します。AI に完全な配送先を渡す必要がある場合は `MCP_ALLOW_PII=true` を設定します。住所と電話番号が AI 側の文脈とログに渡ることを理解した上で有効にしてください。
+
+プロトコルの詳細と全ツールの仕様は [API ドキュメント](docs/API.md) の第 11 章にあります。
 
 ### 商品管理
 

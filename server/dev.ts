@@ -33,6 +33,7 @@ const stripe = process.env.STRIPE_SECRET_KEY
 const piiKey = process.env.CHECKOUT_PII_KEY || createRandomBase64Key();
 const lookupPepper = process.env.CHECKOUT_LOOKUP_PEPPER || crypto.randomUUID();
 const demoPassword = 'nano-demo-2026';
+const mcpToken = process.env.MCP_TOKEN || 'nano-mcp-demo-token-2026';
 
 if (!process.env.DATABASE_URL && database instanceof MemoryCheckoutDatabase) {
   const demoBuyers = [
@@ -72,13 +73,16 @@ const app = createCheckoutApp({
     webhookSecret: process.env.STRIPE_WEBHOOK_SECRET || '',
     adminPasswordHash: process.env.ADMIN_PASSWORD_HASH || await hashAdminPassword(demoPassword),
     adminSessionSecret: process.env.ADMIN_SESSION_SECRET || crypto.randomUUID(),
+    mcpToken,
   },
   appUrl: process.env.APP_URL || 'http://localhost:5173',
   adminDemoMode: !process.env.ADMIN_PASSWORD_HASH,
+  mcpAllowPii: process.env.MCP_ALLOW_PII === 'true',
 });
 
 serve({ fetch: app.fetch, port: 8787 }, (info) => {
   console.log(`Nano Checkout API listening on http://localhost:${info.port}`);
   if (!process.env.STRIPE_SECRET_KEY) console.log('Stripe key not set — local checkout is running in demo mode.');
   if (!process.env.ADMIN_PASSWORD_HASH) console.log(`Admin demo: http://localhost:5173/admin/  password: ${demoPassword}`);
+  console.log(`MCP endpoint: http://localhost:5173/api/mcp  token: ${mcpToken}`);
 });

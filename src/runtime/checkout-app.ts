@@ -4,7 +4,9 @@ import { secureHeaders } from 'hono/secure-headers';
 import { z } from 'zod';
 import type { OrderSpec } from '../config/order-spec';
 import { createAdminSession, verifyAdminPassword, verifyAdminSession } from './admin-auth';
-import { createLookupDigest, decryptPii, encryptPii } from './crypto';
+import { constantTimeEqual, createLookupDigest, decryptPii, encryptPii } from './crypto';
+import { handleMcpMessage } from './mcp';
+import { fulfillmentSchema, orderStatuses, productSchema } from './schemas';
 import { ProductUnavailableError, type AdminOrderRecord, type CheckoutDatabase, type CheckoutSecrets, type FulfillmentPatch, type OrderStatus, type ProductInput, type ProductRecord, type StripeLike } from './types';
 
 const checkoutSchema = z.object({
@@ -28,26 +30,11 @@ export type CheckoutAppDependencies = {
   secrets: CheckoutSecrets;
   appUrl?: string;
   adminDemoMode?: boolean;
+  mcpAllowPii?: boolean;
 };
 
 const adminLoginSchema = z.object({ password: z.string().min(1).max(256) });
-const productSchema = z.object({
-  sku: z.string().trim().min(2).max(64).regex(/^[a-z0-9][a-z0-9._-]*$/),
-  name: z.string().trim().min(1).max(160),
-  edition: z.string().trim().max(120),
-  description: z.string().trim().max(2_000),
-  unitAmount: z.number().int().min(0).max(100_000_000),
-  currency: z.literal('jpy'),
-  shippingAmount: z.number().int().min(0).max(100_000_000),
-  imageUrl: z.string().trim().min(1).max(2_000).refine((value) => value.startsWith('/') || /^https:\/\//.test(value), '画像URLが正しくありません。'),
-  status: z.enum(['active', 'draft', 'archived']),
-  inventory: z.number().int().min(0).max(10_000_000).nullable(),
-});
-const fulfillmentSchema = z.object({
-  shipped: z.boolean().optional(),
-  trackingNumber: z.string().trim().max(120).nullable().optional(),
-});
-const validStatuses = new Set<OrderStatus>(['pending', 'paid', 'payment_failed', 'cancelled']);
+const validStatuses = new Set<OrderStatus>(orderStatuses);
 const adminCookie = 'nano_admin_session';
 const maxLoginFailures = 8;
 const loginBlockMs = 15 * 60 * 1000;
@@ -63,6 +50,30 @@ export function createCheckoutApp(deps: CheckoutAppDependencies) {
   });
 
   app.get('/api/health', (context) => context.json({ ok: true, service: 'nano-checkout' }));
+
+  app.post('/api/mcp', async (context) => {
+    if (!deps.secrets.mcpToken) return context.json({ error: 'Not found' }, 404);
+    const provided = (context.req.header('authorization') || '').replace(/^Bearer /, '');
+    if (!provided || !constantTimeEqual(provided, deps.secrets.mcpToken)) {
+      context.header('www-authenticate', 'Bearer realm="nano-checkout"');
+      return context.json({ error: 'Unauthorized' }, 401);
+    }
+    context.header('cache-control', 'no-store, max-age=0');
+
+    let message: unknown;
+    try {
+      message = await context.req.json();
+    } catch {
+      return context.json({ jsonrpc: '2.0', id: null, error: { code: -32700, message: 'Parse error' } }, 400);
+    }
+    const response = await handleMcpMessage(message, {
+      db: deps.db,
+      piiKey: deps.secrets.piiKey,
+      lookupPepper: deps.secrets.lookupPepper,
+      allowPii: Boolean(deps.mcpAllowPii),
+    });
+    return response ? context.json(response) : context.body(null, 202);
+  });
 
   app.get('/api/storefront/products', async (context) => {
     const products = (await deps.db.listProducts()).filter((product) => product.status === 'active');

@@ -12,6 +12,8 @@ export type PlatformEnvironment = {
   APP_URL?: string;
   ADMIN_PASSWORD_HASH?: string;
   ADMIN_SESSION_SECRET?: string;
+  MCP_TOKEN?: string;
+  MCP_ALLOW_PII?: string;
 };
 
 export function createPlatformApp(environment: PlatformEnvironment, hyperdriveUrl?: string) {
@@ -28,6 +30,7 @@ export function createPlatformApp(environment: PlatformEnvironment, hyperdriveUr
   if (missing.length > 0) throw new Error(`Missing checkout configuration: ${missing.join(', ')}`);
   if (environment.ADMIN_SESSION_SECRET!.length < 32) throw new Error('ADMIN_SESSION_SECRET must contain at least 32 characters');
   if (!environment.ADMIN_PASSWORD_HASH!.startsWith('pbkdf2$')) throw new Error('ADMIN_PASSWORD_HASH must be generated with npm run admin:hash');
+  if (environment.MCP_TOKEN && environment.MCP_TOKEN.length < 32) throw new Error('MCP_TOKEN must contain at least 32 characters');
 
   return createCheckoutApp({
     db: createPostgresDatabase(connectionString!),
@@ -39,7 +42,9 @@ export function createPlatformApp(environment: PlatformEnvironment, hyperdriveUr
       webhookSecret: environment.STRIPE_WEBHOOK_SECRET!,
       adminPasswordHash: environment.ADMIN_PASSWORD_HASH!,
       adminSessionSecret: environment.ADMIN_SESSION_SECRET!,
+      mcpToken: environment.MCP_TOKEN,
     },
     appUrl: environment.APP_URL,
+    mcpAllowPii: environment.MCP_ALLOW_PII === 'true',
   });
 }
