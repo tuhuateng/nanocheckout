@@ -1,30 +1,32 @@
-# Nano Checkout API 接口文档
+# Nano Checkout API リファレンス
 
-本文档对应当前仓库中的 Hono API 实现，适用于 Web、iOS、Android 和 LINE LIFF 客户端。
+**日本語** | [English](API.en.md)
 
-## 1. 基本信息
+このリポジトリの Hono 実装に対応した API 仕様です。Web、iOS、Android、LINE LIFF のクライアントから利用できます。
 
-| 环境 | Base URL |
+## 1. 基本情報
+
+| 環境 | Base URL |
 | --- | --- |
-| 本地前端代理 | `http://localhost:5173/api` |
-| 本地 API 服务 | `http://localhost:8787/api` |
-| 正式环境 | `https://shop.example.com/api` |
+| ローカル（Vite プロキシ経由） | `http://localhost:5173/api` |
+| ローカル（API 直接） | `http://localhost:8787/api` |
+| 本番 | `https://shop.example.com/api` |
 
-- 请求和响应均使用 UTF-8 JSON，Stripe Webhook 除外。
-- 金额单位为日元最小单位，即整数 `4200` 表示 `¥4,200`。
-- 时间字段采用 ISO 8601，例如 `2026-09-02T10:02:57.765Z`。
-- 当前接口没有 `/v1` 前缀。上线后若存在第三方客户端，建议通过新增版本路径演进，避免直接改变现有字段语义。
-- 正式环境必须使用 HTTPS；iOS 默认的 App Transport Security 也要求安全连接。
+- Stripe Webhook を除き、リクエストとレスポンスはすべて UTF-8 の JSON です。
+- 金額は日本円の最小単位の整数です。`4200` は `¥4,200` を表します。
+- 日時は ISO 8601 形式です。例: `2026-09-02T10:02:57.765Z`
+- 現時点で `/v1` のようなバージョン接頭辞はありません。公開後にサードパーティのクライアントが存在する場合は、既存フィールドの意味を変えるのではなく、新しいバージョンパスを追加して移行してください。
+- 本番では HTTPS が必須です。iOS の App Transport Security も既定で安全な接続を要求します。
 
-### 通用错误格式
+### 共通のエラー形式
 
 ```json
 {
-  "error": "错误说明"
+  "error": "エラーの説明"
 }
 ```
 
-字段校验失败时还会返回 `fields`：
+入力値の検証に失敗した場合は `fields` も返します。
 
 ```json
 {
@@ -36,36 +38,37 @@
 }
 ```
 
-## 2. 接口一览
+## 2. エンドポイント一覧
 
-| 方法 | 路径 | 认证 | 用途 |
+| メソッド | パス | 認証 | 用途 |
 | --- | --- | --- | --- |
-| `GET` | `/api/health` | 无 | 健康检查 |
-| `GET` | `/api/storefront/products` | 无 | 获取可销售商品 |
-| `GET` | `/api/storefront/products/:sku` | 无 | 获取指定商品 |
-| `POST` | `/api/orders` | `Idempotency-Key` | 创建订单和 Stripe Checkout |
-| `POST` | `/api/webhooks/stripe` | Stripe 签名 | 接收支付状态 |
-| `GET` | `/api/admin/session` | 无 | 查询管理员登录状态 |
-| `POST` | `/api/admin/session` | 管理密码 | 登录后台 |
-| `DELETE` | `/api/admin/session` | Cookie | 退出后台 |
-| `GET` | `/api/admin/summary` | 管理员 Cookie | 获取后台概要 |
-| `GET` | `/api/admin/orders` | 管理员 Cookie | 查询订单 |
-| `GET` | `/api/admin/orders.csv` | 管理员 Cookie | 导出订单 CSV |
-| `GET` | `/api/admin/orders/:id` | 管理员 Cookie | 获取订单详情 |
-| `PATCH` | `/api/admin/orders/:id` | 管理员 Cookie | 更新发货状态 |
-| `GET` | `/api/admin/products` | 管理员 Cookie | 获取全部商品 |
-| `POST` | `/api/admin/products` | 管理员 Cookie | 创建商品 |
-| `PATCH` | `/api/admin/products/:id` | 管理员 Cookie | 更新商品 |
+| `GET` | `/api/health` | なし | ヘルスチェック |
+| `GET` | `/api/storefront/products` | なし | 販売中の商品一覧 |
+| `GET` | `/api/storefront/products/:sku` | なし | 商品の取得 |
+| `POST` | `/api/orders` | `Idempotency-Key` | 注文と Stripe Checkout の作成 |
+| `POST` | `/api/webhooks/stripe` | Stripe 署名 | 決済ステータスの受信 |
+| `POST` | `/api/mcp` | Bearer トークン | AI クライアント向け MCP |
+| `GET` | `/api/admin/session` | なし | ログイン状態の確認 |
+| `POST` | `/api/admin/session` | 管理パスワード | 管理画面へのログイン |
+| `DELETE` | `/api/admin/session` | Cookie | ログアウト |
+| `GET` | `/api/admin/summary` | 管理者 Cookie | ダッシュボードの概要 |
+| `GET` | `/api/admin/orders` | 管理者 Cookie | 注文の検索 |
+| `GET` | `/api/admin/orders.csv` | 管理者 Cookie | 注文の CSV 書き出し |
+| `GET` | `/api/admin/orders/:id` | 管理者 Cookie | 注文の詳細 |
+| `PATCH` | `/api/admin/orders/:id` | 管理者 Cookie | 発送状況の更新 |
+| `GET` | `/api/admin/products` | 管理者 Cookie | 全商品の取得 |
+| `POST` | `/api/admin/products` | 管理者 Cookie | 商品の作成 |
+| `PATCH` | `/api/admin/products/:id` | 管理者 Cookie | 商品の更新 |
 
-## 3. 公开接口
+## 3. 公開エンドポイント
 
-### 3.1 健康检查
+### 3.1 ヘルスチェック
 
 ```http
 GET /api/health
 ```
 
-响应 `200`：
+レスポンス `200`:
 
 ```json
 {
@@ -74,15 +77,15 @@ GET /api/health
 }
 ```
 
-### 3.2 商品列表
+### 3.2 商品一覧
 
-只返回状态为 `active` 的商品。公开结果不会暴露实际库存数量，只返回当前是否可购买。
+ステータスが `active` の商品だけを返します。実際の在庫数は公開されず、購入できるかどうかだけを返します。
 
 ```http
 GET /api/storefront/products
 ```
 
-响应 `200`：
+レスポンス `200`:
 
 ```json
 {
@@ -103,19 +106,19 @@ GET /api/storefront/products
 }
 ```
 
-### 3.3 商品详情
+### 3.3 商品の取得
 
 ```http
 GET /api/storefront/products/{sku}
 ```
 
-示例：
+例:
 
 ```bash
 curl https://shop.example.com/api/storefront/products/everyday-tray-01
 ```
 
-响应 `200`：
+レスポンス `200`:
 
 ```json
 {
@@ -134,15 +137,15 @@ curl https://shop.example.com/api/storefront/products/everyday-tray-01
 }
 ```
 
-商品不存在、尚未发布或已归档时返回 `404`：
+商品が存在しない、未公開、またはアーカイブ済みの場合は `404` を返します。
 
 ```json
 { "error": "Product not found" }
 ```
 
-### 3.4 创建订单
+### 3.4 注文の作成
 
-由服务端根据 SKU 读取价格和运费、预留库存，并创建 Stripe Hosted Checkout Session。客户端提交的任何价格字段都会被忽略。
+サーバーが SKU から価格と送料を読み取り、在庫を確保して Stripe Hosted Checkout Session を作成します。クライアントが送信した金額フィールドはすべて無視されます。
 
 ```http
 POST /api/orders
@@ -150,26 +153,26 @@ Content-Type: application/json
 Idempotency-Key: 550e8400-e29b-41d4-a716-446655440000
 ```
 
-`Idempotency-Key` 必须为 16–128 个字符。一次购买操作生成一个 UUID；网络超时重试时必须复用同一个值，新的购买操作则使用新的值。
+`Idempotency-Key` は 16〜128 文字です。1 回の購入操作につき UUID をひとつ生成します。通信タイムアウトで再送する場合は同じ値を使い、別の購入では新しい値を使ってください。
 
-请求字段：
+リクエストフィールド:
 
-| 字段 | 类型 | 必填 | 规则 |
+| フィールド | 型 | 必須 | 制約 |
 | --- | --- | --- | --- |
-| `sku` | string | 建议 | 2–64 字符；不传时选择第一个在售商品 |
-| `quantity` | integer | 是 | 1–5 |
-| `email` | string | 是 | 合法邮箱，最多 254 字符 |
-| `familyName` | string | 是 | 姓，1–80 字符 |
-| `givenName` | string | 是 | 名，1–80 字符 |
-| `postalCode` | string | 是 | 7–8 个数字、全角数字或连字符，例如 `150-0001` |
-| `prefecture` | string | 是 | 都道府县，2–4 字符 |
-| `city` | string | 是 | 城市及区町村，1–120 字符 |
-| `addressLine1` | string | 是 | 街道门牌，1–120 字符 |
-| `addressLine2` | string | 否 | 建筑名、房间号，最多 120 字符，默认空字符串 |
-| `phone` | string | 是 | 8–30 字符 |
-| `externalUserId` | string | 否 | 1–128 字符。LINE 用户 ID 或 App 自己的用户标识，用于发货时推送通知 |
+| `sku` | string | 推奨 | 2〜64 文字。省略時は販売中の最初の商品を選びます |
+| `quantity` | integer | 必須 | 1〜5 |
+| `email` | string | 必須 | メール形式、最大 254 文字 |
+| `familyName` | string | 必須 | 姓、1〜80 文字 |
+| `givenName` | string | 必須 | 名、1〜80 文字 |
+| `postalCode` | string | 必須 | 半角/全角数字とハイフンで 7〜8 文字。例: `150-0001` |
+| `prefecture` | string | 必須 | 都道府県、2〜4 文字 |
+| `city` | string | 必須 | 市区町村、1〜120 文字 |
+| `addressLine1` | string | 必須 | 番地、1〜120 文字 |
+| `addressLine2` | string | 任意 | 建物名・部屋番号、最大 120 文字。既定は空文字列 |
+| `phone` | string | 必須 | 8〜30 文字 |
+| `externalUserId` | string | 任意 | 1〜128 文字。LINE ユーザー ID やアプリ側の利用者 ID |
 
-请求示例：
+リクエスト例:
 
 ```json
 {
@@ -188,11 +191,11 @@ Idempotency-Key: 550e8400-e29b-41d4-a716-446655440000
 }
 ```
 
-`externalUserId` 是把订单和你自己的用户体系关联起来的字段。LINE 小程序传 `liff.getProfile()` 拿到的 `userId`，App 传自己的用户 ID。发货时凭它通过 LINE Messaging API 或推送通知联系买家，而不必依赖邮件——日本用户的邮件打开率远低于 LINE。不传则为 `null`，不影响下单。
+`externalUserId` は注文を自社の利用者と結びつけるためのフィールドです。LINE ミニアプリなら `liff.getProfile()` の `userId`、ネイティブアプリなら自前の利用者 ID を渡します。発送時にこの ID を使って LINE Messaging API やプッシュ通知で購入者に連絡できます。日本ではメールより LINE のほうが確実に読まれます。省略した場合は `null` になり、注文自体には影響しません。
 
-该字段以明文存储在 `external_user_id` 列并建有索引，因为需要按它反查订单。它不随其他购买者信息一起加密。
+この値は `external_user_id` 列に平文で保存し、索引を張っています。この ID で注文を引く必要があるためで、ほかの購入者情報のようには暗号化されません。
 
-响应 `201`：
+レスポンス `201`:
 
 ```json
 {
@@ -213,19 +216,19 @@ Idempotency-Key: 550e8400-e29b-41d4-a716-446655440000
 }
 ```
 
-收到响应后，将用户导航到 `checkoutUrl`。银行卡信息只提交给 Stripe，不经过本项目 API。
+レスポンスを受け取ったら `checkoutUrl` へ遷移させてください。カード情報は Stripe だけに送信され、この API を経由しません。
 
-可能的状态码：
+想定されるステータスコード:
 
-| 状态码 | 场景 |
+| コード | 状況 |
 | --- | --- |
-| `201` | 创建成功 |
-| `400` | 缺少或错误的 `Idempotency-Key`、JSON 格式错误 |
-| `409` | 商品未发布、已售罄、并发购买导致库存不足，或店铺当前没有任何在售商品 |
-| `422` | 收件人、地址或数量校验失败 |
-| `502` | Stripe Session 创建失败；已预留的库存会自动归还 |
+| `201` | 作成成功 |
+| `400` | `Idempotency-Key` の欠落や不正、JSON の形式不正 |
+| `409` | 未公開・売り切れ・同時購入による在庫不足、または販売中の商品が 1 件もない |
+| `422` | 宛先、住所、数量の検証エラー |
+| `502` | Stripe Session の作成失敗。確保した在庫は自動で戻します |
 
-cURL 示例：
+cURL の例:
 
 ```bash
 curl -X POST https://shop.example.com/api/orders \
@@ -246,9 +249,9 @@ curl -X POST https://shop.example.com/api/orders \
   }'
 ```
 
-## 4. iOS 接入示例
+## 4. iOS からの利用
 
-Stripe Secret Key 不得放入 iOS App。App 只调用 Nano Checkout API，然后使用系统浏览器打开服务端返回的 `checkoutUrl`。
+Stripe Secret Key を iOS アプリに埋め込んではいけません。アプリは Nano Checkout の API を呼ぶだけで、返ってきた `checkoutUrl` をシステムのブラウザで開きます。物理的な商品の販売にアプリ内課金は不要なため、この方式が使えます。
 
 ```swift
 import Foundation
@@ -283,6 +286,7 @@ struct CheckoutRequest: Encodable {
     let addressLine1: String
     let addressLine2: String
     let phone: String
+    let externalUserId: String?
 }
 
 struct CheckoutResponse: Decodable {
@@ -324,18 +328,20 @@ enum CheckoutAPI {
 
 @MainActor
 func startCheckout(_ input: CheckoutRequest) async throws {
-    // 若网络超时，请为同一次购买复用该 UUID。
+    // 通信がタイムアウトした場合、同じ購入では この UUID を使い回すこと。
     let operationID = UUID()
     let checkout = try await CheckoutAPI.createOrder(input, idempotencyKey: operationID)
     await UIApplication.shared.open(checkout.checkoutUrl)
 }
 ```
 
-支付完成后 Stripe 会跳转到 `${APP_URL}/success?session_id=...`。若要自动返回原生 App，可让 `APP_URL` 使用已配置 Universal Links 的 HTTPS 域名，并由 `/success` 页面提供“返回 App”入口。支付最终状态以 Stripe Webhook 为准，不应仅凭客户端返回页面判断成功。
+決済が完了すると Stripe は `${APP_URL}/success?session_id=...` へ遷移します。アプリへ自動的に戻したい場合は、Universal Links を設定した HTTPS ドメインを `APP_URL` に指定し、`/success` ページにアプリへ戻る導線を置いてください。最終的な決済結果は Stripe Webhook を正とし、クライアントの戻り画面だけで成功と判断しないでください。
 
-## 5. LINE LIFF / Web 接入示例
+`externalUserId` にアプリ側の利用者 ID を渡しておくと、発送時にその利用者へプッシュ通知を送れます。
 
-在 LIFF 里下单时，把 LINE 的 `userId` 一起提交，订单就和这个 LINE 用户绑定了，发货时可以直接推消息给他。
+## 5. LINE LIFF / Web からの利用
+
+LIFF から注文するときに LINE の `userId` を一緒に送ると、注文がその LINE ユーザーと結びつき、発送時にメッセージを直接送れるようになります。
 
 ```js
 await liff.init({ liffId: 'YOUR_LIFF_ID' });
@@ -358,15 +364,15 @@ if (!response.ok) throw new Error(result.error || 'Checkout failed');
 location.assign(result.checkoutUrl);
 ```
 
-支付完成后 Stripe 会跳回 `${APP_URL}/success`。在 LIFF 里可以让这个页面调用 `liff.closeWindow()` 关掉 webview 回到聊天窗口。
+決済後、Stripe は `${APP_URL}/success` へ戻します。LIFF ではこのページで `liff.closeWindow()` を呼び、webview を閉じてトーク画面へ戻すことができます。
 
-发货环节：后台把订单标记为已发货后，用订单里的 `externalUserId` 调 LINE Messaging API 的 push message 通知买家。本仓库不含 Messaging API 的调用代码，Channel Access Token 属于你自己的 LINE 官方账号，按需接入即可。
+発送の連絡は、管理画面で発送済みにしたあと、注文の `externalUserId` を使って LINE Messaging API の push message で送ります。Messaging API を呼ぶコードはこのリポジトリには含まれていません。Channel Access Token は各自の LINE 公式アカウントに属するものなので、必要に応じて実装してください。
 
-当前服务默认按同源部署设计，没有开放任意来源 CORS。若 LIFF 页面与 API 不在同一域名，应通过同源代理访问，或在服务端增加严格的来源白名单；不要使用 `*` 开放管理员接口。
+このサービスは同一オリジンでの配信を前提に設計しており、任意のオリジンに対する CORS は開けていません。LIFF ページと API のドメインが異なる場合は、同一オリジンのプロキシ経由でアクセスするか、サーバー側で厳密なオリジン許可リストを設けてください。管理者向けエンドポイントを `*` で開放してはいけません。
 
 ## 6. Stripe Webhook
 
-该接口仅供 Stripe 调用，普通客户端不要调用。
+このエンドポイントは Stripe からのみ呼び出されます。通常のクライアントから呼ばないでください。
 
 ```http
 POST /api/webhooks/stripe
@@ -374,35 +380,35 @@ Stripe-Signature: t=...,v1=...
 Content-Type: application/json
 ```
 
-服务端使用原始请求体、`STRIPE_WEBHOOK_SECRET` 和 5 分钟时间窗口验证签名。
+サーバーは生のリクエストボディ、`STRIPE_WEBHOOK_SECRET`、5 分間の時刻許容範囲で署名を検証します。
 
-已处理事件：
+処理しているイベント:
 
-| Stripe 事件 | 订单状态 |
+| Stripe イベント | 注文ステータス |
 | --- | --- |
 | `checkout.session.completed` | `paid` |
 | `checkout.session.async_payment_succeeded` | `paid` |
 | `checkout.session.async_payment_failed` | `payment_failed` |
-| `checkout.session.expired` | `cancelled`，归还库存 |
+| `checkout.session.expired` | `cancelled`（在庫を戻す） |
 
-成功响应 `200`：
+成功時のレスポンス `200`:
 
 ```json
 { "received": true }
 ```
 
-签名缺失或无效时返回 `400`。
+署名が欠落している、または不正な場合は `400` を返します。
 
-## 7. 管理员认证
+## 7. 管理者認証
 
-管理员接口使用签名的 HttpOnly Cookie `nano_admin_session`，不是 Bearer Token。正式环境 Cookie 同时设置：
+管理者エンドポイントは Bearer トークンではなく、署名付きの HttpOnly Cookie `nano_admin_session` を使います。本番では次の属性が付きます。
 
 - `HttpOnly`
 - `Secure`
 - `SameSite=Strict`
-- 有效期 8 小时
+- 有効期間 8 時間
 
-### 7.1 查询登录状态
+### 7.1 ログイン状態の確認
 
 ```http
 GET /api/admin/session
@@ -415,7 +421,7 @@ GET /api/admin/session
 }
 ```
 
-### 7.2 登录
+### 7.2 ログイン
 
 ```http
 POST /api/admin/session
@@ -423,20 +429,20 @@ Content-Type: application/json
 ```
 
 ```json
-{ "password": "管理后台密码" }
+{ "password": "管理画面のパスワード" }
 ```
 
-成功响应 `200`，并通过 `Set-Cookie` 写入会话：
+成功すると `200` を返し、`Set-Cookie` でセッションを書き込みます。
 
 ```json
 { "authenticated": true }
 ```
 
-密码错误返回 `401`。同一来源 IP 连续 8 次失败后，该 IP 会被锁定 15 分钟，期间无论密码是否正确都返回 `429`，并带 `Retry-After` 响应头。计数保存在运行实例的内存中，多实例部署时请在 Cloudflare 等边缘层再叠加一层限流。
+パスワードが誤っている場合は `401` です。同一の送信元 IP から 8 回続けて失敗すると、その IP は 15 分間ブロックされ、その間は正しいパスワードでも `429` と `Retry-After` ヘッダーを返します。この回数は実行中インスタンスのメモリで数えているため、複数インスタンス構成では Cloudflare などのエッジ側でもレート制限を重ねてください。
 
-本地演示环境默认密码为 `nano-demo-2026`，正式环境必须通过 `ADMIN_PASSWORD_HASH` 配置自己的密码哈希。
+ローカルのデモ環境の既定パスワードは `nano-demo-2026` です。本番では `ADMIN_PASSWORD_HASH` で自分のパスワードハッシュを必ず設定してください。
 
-### 7.3 退出
+### 7.3 ログアウト
 
 ```http
 DELETE /api/admin/session
@@ -446,7 +452,7 @@ DELETE /api/admin/session
 { "authenticated": false }
 ```
 
-cURL 登录并访问后台接口：
+cURL でログインして管理者エンドポイントを叩く例:
 
 ```bash
 curl -c admin-cookie.txt \
@@ -457,21 +463,21 @@ curl -c admin-cookie.txt \
 curl -b admin-cookie.txt https://shop.example.com/api/admin/summary
 ```
 
-## 8. 管理员订单接口
+## 8. 管理者向け注文エンドポイント
 
-以下接口未登录时统一返回 `401`：
+以下のエンドポイントは未ログインの場合すべて `401` を返します。
 
 ```json
 { "error": "Unauthorized" }
 ```
 
-### 8.1 后台概要
+### 8.1 ダッシュボードの概要
 
 ```http
 GET /api/admin/summary
 ```
 
-返回统计数据和最近 8 个订单：
+集計値と直近 8 件の注文を返します。
 
 ```json
 {
@@ -486,23 +492,23 @@ GET /api/admin/summary
 }
 ```
 
-### 8.2 订单列表
+### 8.2 注文の検索
 
 ```http
 GET /api/admin/orders?status=paid&limit=50&q=buyer@example.com
 ```
 
-查询参数：
+クエリパラメータ:
 
-| 参数 | 说明 |
+| パラメータ | 説明 |
 | --- | --- |
-| `status` | 可选：`pending`、`paid`、`payment_failed`、`cancelled` |
-| `limit` | 1–100，默认 50，超出范围会被限制到有效范围 |
-| `q` | 可选。含 `@` 时按邮箱精确匹配，否则按订单 ID 前缀匹配 |
+| `status` | 任意。`pending`、`paid`、`payment_failed`、`cancelled` |
+| `limit` | 1〜100、既定は 50。範囲外の値は有効範囲に丸めます |
+| `q` | 任意。`@` を含む場合はメールアドレスの完全一致、それ以外は注文 ID の前方一致 |
 
-购买者姓名保存在加密字段中，数据库无法直接检索，因此 `q` 只支持邮箱和订单 ID。后台界面在此基础上，对已加载的这一页订单再做一次本地的姓名过滤。
+購入者の氏名は暗号化されたフィールドに入っており、データベースでは検索できません。そのため `q` が対応するのはメールアドレスと注文 ID だけです。管理画面はこれに加えて、読み込み済みの一覧に対して氏名で絞り込みを行っています。
 
-响应 `200`：
+レスポンス `200`:
 
 ```json
 {
@@ -541,73 +547,73 @@ GET /api/admin/orders?status=paid&limit=50&q=buyer@example.com
 }
 ```
 
-`buyer` 是服务端在管理员认证通过后解密的购买者信息。数据库中的 `encryptedPii` 不会出现在响应中。
+`buyer` は管理者認証を通過したあとにサーバー側で復号した購入者情報です。データベース上の `encryptedPii` はレスポンスに含まれません。
 
-### 8.3 订单详情
+### 8.3 注文の詳細
 
 ```http
 GET /api/admin/orders/{orderId}
 ```
 
-响应格式为：
+レスポンスの形:
 
 ```json
 { "order": { "id": "...", "status": "paid", "buyer": {} } }
 ```
 
-订单不存在时返回 `404`。
+注文が存在しない場合は `404` です。
 
-### 8.4 更新发货状态
+### 8.4 発送状況の更新
 
 ```http
 PATCH /api/admin/orders/{orderId}
 Content-Type: application/json
 ```
 
-请求字段：
+リクエストフィールド:
 
-| 字段 | 类型 | 规则 |
+| フィールド | 型 | 制約 |
 | --- | --- | --- |
-| `shipped` | boolean | 可选。`true` 记录当前时间为发货时间，`false` 清除发货时间 |
-| `trackingNumber` | string/null | 可选。最多 120 字符，`null` 或空字符串表示清除 |
+| `shipped` | boolean | 任意。`true` で現在時刻を発送日時として記録し、`false` で消去します |
+| `trackingNumber` | string/null | 任意。最大 120 文字。`null` または空文字列で消去します |
 
-标记发货：
+発送済みにする:
 
 ```json
 { "shipped": true, "trackingNumber": "YAMATO-8899-0011" }
 ```
 
-成功返回 `200` 和更新后的完整订单，格式与订单详情一致。空对象返回 `400`，订单不存在返回 `404`，字段校验失败返回 `422`。
+成功すると `200` と更新後の注文全体を返します。形式は注文詳細と同じです。空のオブジェクトは `400`、注文が存在しない場合は `404`、検証エラーは `422` です。
 
-订单状态不是 `paid` 时，`shipped: true` 返回 `409`：
+注文ステータスが `paid` でないときに `shipped: true` を送ると `409` を返します。
 
 ```json
 { "error": "決済が完了した注文のみ発送済みにできます。" }
 ```
 
-这一限制只作用于「标记为已发货」。清除发货状态和单独保存追踪号不受订单状态限制。
+この制限は「発送済みにする」操作にだけ働きます。発送状態の取り消しと、追跡番号だけの保存は注文ステータスに関係なく行えます。
 
-### 8.5 导出订单 CSV
+### 8.5 注文の CSV 書き出し
 
 ```http
 GET /api/admin/orders.csv?status=paid&limit=1000
 ```
 
-参数与订单列表一致，`limit` 默认 1000，上限 5000。响应为 `text/csv; charset=utf-8`，带 UTF-8 BOM 以便 Excel 正确识别日文，并通过 `Content-Disposition` 提示下载。
+パラメータは注文の検索と同じです。`limit` の既定は 1000、上限は 5000 です。レスポンスは `text/csv; charset=utf-8` で、Excel が日本語を正しく判別できるよう UTF-8 BOM を付け、`Content-Disposition` でダウンロードを促します。
 
-列依次为：注文ID、ステータス、発送日時、追跡番号、外部ユーザーID、注文日時、商品名、数量、合計金額、通貨、お名前、メール、電話番号、郵便番号、都道府県、市区町村、番地、建物名。
+列の順序: 注文ID、ステータス、発送日時、追跡番号、外部ユーザーID、注文日時、商品名、数量、合計金額、通貨、お名前、メール、電話番号、郵便番号、都道府県、市区町村、番地、建物名。
 
-所有字段都会加引号，且以 `=`、`+`、`-`、`@` 开头的值会被加上前导单引号，避免电子表格把它当作公式执行。该文件包含解密后的个人信息，请按内部规定保管。
+すべての値は引用符で囲み、`=`、`+`、`-`、`@` で始まる値には先頭にシングルクォートを付けて、表計算ソフトが数式として実行しないようにしています。このファイルには復号済みの個人情報が含まれます。社内規程に従って取り扱ってください。
 
-## 9. 管理员商品接口
+## 9. 管理者向け商品エンドポイント
 
-### 9.1 获取全部商品
+### 9.1 全商品の取得
 
 ```http
 GET /api/admin/products
 ```
 
-与公开接口不同，这里包含草稿、归档状态和库存数量。
+公開エンドポイントと異なり、下書き・アーカイブの状態と在庫数を含みます。
 
 ```json
 {
@@ -617,7 +623,7 @@ GET /api/admin/products
       "sku": "everyday-tray-01",
       "name": "Everyday Carry Tray",
       "edition": "Sand / Edition 01",
-      "description": "商品说明",
+      "description": "商品説明",
       "unitAmount": 4200,
       "currency": "jpy",
       "shippingAmount": 0,
@@ -631,29 +637,29 @@ GET /api/admin/products
 }
 ```
 
-### 9.2 创建商品
+### 9.2 商品の作成
 
 ```http
 POST /api/admin/products
 Content-Type: application/json
 ```
 
-请求字段：
+リクエストフィールド:
 
-| 字段 | 类型 | 规则 |
+| フィールド | 型 | 制約 |
 | --- | --- | --- |
-| `sku` | string | 2–64 字符，仅小写字母、数字、点、下划线和连字符；全局唯一 |
-| `name` | string | 1–160 字符 |
-| `edition` | string | 必须提供，可为空，最多 120 字符 |
-| `description` | string | 必须提供，可为空，最多 2,000 字符 |
-| `unitAmount` | integer | 0–100,000,000 |
-| `currency` | string | 当前只能是 `jpy` |
-| `shippingAmount` | integer | 0–100,000,000 |
-| `imageUrl` | string | `/` 开头的站内路径或 HTTPS URL |
-| `status` | string | `active`、`draft` 或 `archived` |
-| `inventory` | integer/null | 0–10,000,000；`null` 表示不限库存 |
+| `sku` | string | 2〜64 文字。英小文字、数字、ドット、アンダースコア、ハイフンのみ。全体で一意 |
+| `name` | string | 1〜160 文字 |
+| `edition` | string | 必須。空文字列可、最大 120 文字 |
+| `description` | string | 必須。空文字列可、最大 2,000 文字 |
+| `unitAmount` | integer | 0〜100,000,000 |
+| `currency` | string | 現在は `jpy` のみ |
+| `shippingAmount` | integer | 0〜100,000,000 |
+| `imageUrl` | string | `/` で始まるサイト内パス、または HTTPS の URL |
+| `status` | string | `active`、`draft`、`archived` |
+| `inventory` | integer/null | 0〜10,000,000。`null` は在庫無制限 |
 
-请求示例：
+リクエスト例:
 
 ```json
 {
@@ -670,22 +676,22 @@ Content-Type: application/json
 }
 ```
 
-成功返回 `201` 和创建后的完整 `product`。SKU 重复返回 `409`，字段校验失败返回 `422`。
+成功すると `201` と作成された `product` 全体を返します。SKU の重複は `409`、検証エラーは `422` です。
 
-### 9.3 更新商品
+### 9.3 商品の更新
 
 ```http
 PATCH /api/admin/products/{productId}
 Content-Type: application/json
 ```
 
-支持仅提交需要修改的字段。例如发布商品：
+変更したいフィールドだけを送れます。公開する場合:
 
 ```json
 { "status": "active" }
 ```
 
-调整价格和库存：
+価格と在庫を変える場合:
 
 ```json
 {
@@ -694,24 +700,24 @@ Content-Type: application/json
 }
 ```
 
-成功返回 `200` 和更新后的完整 `product`。空对象返回 `400`，商品不存在返回 `404`，SKU 冲突返回 `409`。
+成功すると `200` と更新後の `product` 全体を返します。空のオブジェクトは `400`、商品が存在しない場合は `404`、SKU の衝突は `409` です。
 
-当前没有物理删除商品的接口。停止销售请设为 `draft`，需要保留历史但从正常管理流程移除时设为 `archived`。
+商品を物理削除するエンドポイントはありません。販売を止めるときは `draft`、履歴は残しつつ通常の管理対象から外すときは `archived` にしてください。
 
-## 10. 安全与集成注意事项
+## 10. セキュリティと連携上の注意
 
-- Stripe Secret Key、Webhook Secret、数据库连接和 PII 密钥只能保存在服务端环境变量中。
-- 商品价格、运费和库存由服务端决定；客户端只提交 SKU 和数量。
-- 购买者信息在数据库中使用 AES-256-GCM 加密，邮箱检索值使用 HMAC-SHA256。
-- `externalUserId` 为便于反查以明文存储。它本身是可定位到个人的标识，导出和访问按个人信息对待。
-- 创建订单不需要登录，正式业务应在 Cloudflare 上按 IP 或业务身份增加速率限制和风控规则。
-- 管理员接口包含解密后的个人信息，不要从消费者 App 调用，也不要向任意来源开放 CORS。
-- `checkoutUrl` 是短期支付入口，客户端不应缓存或共享。
-- 前端跳转成功不等于最终入账；订单履约应以后台收到的 Stripe Webhook 状态为准。
+- Stripe Secret Key、Webhook Secret、データベース接続情報、PII 鍵はサーバー側の環境変数にのみ保存してください。
+- 商品価格、送料、在庫はサーバーが決定します。クライアントが送るのは SKU と数量だけです。
+- 購入者情報はデータベース内で AES-256-GCM により暗号化し、検索用のメール値は HMAC-SHA256 で不可逆化しています。
+- `externalUserId` は逆引きのため平文で保存します。これ自体が個人を特定しうる識別子なので、書き出しとアクセスは個人情報として扱ってください。
+- 注文作成にログインは不要です。実運用では Cloudflare 側で IP や業務上の識別子によるレート制限と不正検知を追加してください。
+- 管理者エンドポイントは復号済みの個人情報を含みます。消費者向けアプリから呼ばず、任意のオリジンに CORS を開けないでください。
+- `checkoutUrl` は短命の決済入口です。クライアントでキャッシュしたり共有したりしないでください。
+- フロントエンドの遷移が成功しても入金確定ではありません。注文の履行は、サーバーが受け取った Stripe Webhook のステータスを正としてください。
 
-## 11. MCP 接口（AI 直连）
+## 11. MCP エンドポイント（AI 連携）
 
-店铺可以把 Claude 这类 AI 客户端直接接到后台，用自然语言查销售、改商品、记发货。接口是一个符合 MCP 规范的 Streamable HTTP 端点，和 API 部署在一起。
+Claude のような AI クライアントを管理機能に直接つなぎ、自然言語で売上の確認、商品の変更、発送の記録を行えます。MCP 仕様に沿った Streamable HTTP エンドポイントで、API と同じ場所にデプロイされます。
 
 ```http
 POST /api/mcp
@@ -719,42 +725,42 @@ Authorization: Bearer <MCP_TOKEN>
 Content-Type: application/json
 ```
 
-未设置 `MCP_TOKEN` 时该端点返回 `404`，即完全关闭。token 少于 32 个字符时服务拒绝启动。token 错误返回 `401` 并带 `WWW-Authenticate: Bearer`。
+`MCP_TOKEN` を設定していない場合、このエンドポイントは `404` を返し、機能ごと無効になります。トークンが 32 文字未満だとサービスは起動を拒否します。トークンが誤っている場合は `401` と `WWW-Authenticate: Bearer` を返します。
 
-传输层实现的是无状态的 Streamable HTTP：单条 JSON-RPC 2.0 请求走 POST，响应为 `application/json`；通知（无 `id`）返回 `202` 空响应；不使用 SSE，也不维护 `Mcp-Session-Id`。协议版本按客户端声明回显，支持 `2025-06-18`、`2025-03-26` 和 `2024-11-05`。
+トランスポートはステートレスな Streamable HTTP です。単一の JSON-RPC 2.0 リクエストを POST し、レスポンスは `application/json` で返します。通知（`id` なし）には `202` を空ボディで返します。SSE は使わず、`Mcp-Session-Id` も保持しません。プロトコルバージョンはクライアントの申告を反映し、`2025-06-18`、`2025-03-26`、`2024-11-05` に対応します。
 
-### 11.1 支持的方法
+### 11.1 対応しているメソッド
 
-| 方法 | 说明 |
+| メソッド | 説明 |
 | --- | --- |
-| `initialize` | 握手，返回协议版本、能力和 `serverInfo` |
-| `notifications/initialized` | 客户端握手完成通知，返回 `202` |
-| `ping` | 心跳，返回空结果 |
-| `tools/list` | 列出全部工具及其 JSON Schema |
-| `tools/call` | 调用工具 |
+| `initialize` | ハンドシェイク。プロトコルバージョン、ケイパビリティ、`serverInfo` を返します |
+| `notifications/initialized` | クライアントのハンドシェイク完了通知。`202` を返します |
+| `ping` | 疎通確認。空の結果を返します |
+| `tools/list` | 全ツールとその JSON Schema を返します |
+| `tools/call` | ツールを実行します |
 
-未实现的方法返回 JSON-RPC 错误 `-32601`；工具名不存在返回 `-32602`。工具内部的业务错误不走 JSON-RPC 错误，而是返回 `isError: true` 的正常结果，便于 AI 读到原因后自行纠正。
+未実装のメソッドは JSON-RPC エラー `-32601`、存在しないツール名は `-32602` を返します。ツール内部の業務エラーは JSON-RPC エラーにせず、`isError: true` を付けた通常の結果として返します。AI が理由を読んで自分で修正できるようにするためです。
 
-### 11.2 工具一览
+### 11.2 ツール一覧
 
-| 工具 | 只读 | 用途 |
+| ツール | 読み取り専用 | 用途 |
 | --- | --- | --- |
-| `get_sales_summary` | 是 | 销售额、订单数、待处理和已支付数量 |
-| `list_orders` | 是 | 按时间倒序列出订单，可按支付状态筛选 |
-| `find_orders_by_email` | 是 | 按邮箱精确查找订单 |
-| `get_order` | 是 | 按订单 ID 读取单个订单 |
-| `list_products` | 是 | 列出商品，含价格、状态和库存 |
-| `create_product` | 否 | 创建商品 |
-| `update_product` | 否 | 修改价格、库存、说明或上下架状态 |
-| `mark_shipped` | 否 | 记录或取消发货，保存追踪号 |
+| `get_sales_summary` | はい | 売上、注文数、未処理と決済済みの件数 |
+| `list_orders` | はい | 新しい順に注文を一覧。決済ステータスで絞り込み可 |
+| `find_orders_by_email` | はい | メールアドレスの完全一致で注文を検索 |
+| `get_order` | はい | 注文 ID で 1 件を取得 |
+| `list_products` | はい | 価格、ステータス、在庫を含む商品一覧 |
+| `create_product` | いいえ | 商品の作成 |
+| `update_product` | いいえ | 価格、在庫、説明、公開状態の変更 |
+| `mark_shipped` | いいえ | 発送の記録と取り消し、追跡番号の保存 |
 
-写入工具的校验规则与管理员 REST 接口共用同一份 schema，因此价格上限、SKU 格式、库存范围等约束完全一致。`mark_shipped` 同样只允许把 `paid` 的订单标为已发货。
+書き込み系ツールの検証ルールは管理者 REST API と同じスキーマを共有しているため、価格の上限、SKU の形式、在庫の範囲といった制約は完全に一致します。`mark_shipped` も同様に、`paid` の注文だけを発送済みにできます。
 
-有意不提供的能力：创建订单、退款、删除数据。AI 无法通过这个接口产生扣款或不可逆的删除。
+意図的に提供していない機能: 注文の作成、返金、データの削除。AI がこの接続から課金や取り消せない削除を行うことはできません。
 
-### 11.3 个人信息
+### 11.3 個人情報
 
-订单类工具默认对购买者信息脱敏，只返回姓氏、掩码邮箱和都道府县，并附带 `piiRedacted: true`。`externalUserId` 同样被隐去——LINE 用户 ID 与住址一样可以定位到具体的人：
+注文系のツールは既定で購入者情報を伏せ、姓、マスクしたメールアドレス、都道府県だけを返し、`piiRedacted: true` を付けます。`externalUserId` も同様に伏せます。LINE ユーザー ID は住所と同じく個人を特定できるためです。
 
 ```json
 {
@@ -766,16 +772,16 @@ Content-Type: application/json
 }
 ```
 
-需要 AI 读到完整收件信息（例如让它整理面单）时，设置环境变量 `MCP_ALLOW_PII=true`，订单工具改为返回与管理员接口一致的完整 `buyer` 对象。开启前请确认：这些地址和电话会进入 AI 服务商的上下文与日志。
+AI に完全な配送先を読ませたい場合（送り状の整理などで必要なとき）は、環境変数 `MCP_ALLOW_PII=true` を設定します。注文系ツールは管理者エンドポイントと同じ完全な `buyer` オブジェクトを返すようになります。有効にする前に確認してください。これらの住所と電話番号は AI ベンダーの文脈とログに渡ります。
 
-### 11.4 接入 Claude Code
+### 11.4 Claude Code から接続する
 
 ```bash
 claude mcp add --transport http nano-checkout https://shop.example.com/api/mcp \
   --header "Authorization: Bearer $MCP_TOKEN"
 ```
 
-或写进项目的 `.mcp.json`：
+プロジェクトの `.mcp.json` に書く場合:
 
 ```json
 {
@@ -789,9 +795,9 @@ claude mcp add --transport http nano-checkout https://shop.example.com/api/mcp \
 }
 ```
 
-本接口使用固定 bearer token，不实现 OAuth 2.1 授权流程。只支持 OAuth 的客户端无法直接连接。
+このエンドポイントは固定の bearer トークンを使い、OAuth 2.1 の認可フローは実装していません。OAuth のみに対応するクライアントからは直接接続できません。
 
-### 11.5 用 curl 验证
+### 11.5 curl で確認する
 
 ```bash
 curl -X POST https://shop.example.com/api/mcp \
@@ -799,4 +805,3 @@ curl -X POST https://shop.example.com/api/mcp \
   -H 'Content-Type: application/json' \
   -d '{"jsonrpc":"2.0","id":1,"method":"tools/list"}'
 ```
-

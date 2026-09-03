@@ -1,6 +1,6 @@
 # Nano Checkout
 
-[日本語](README.md) | [简体中文](README.zh-CN.md) | **English**
+[日本語](README.md) | **English**
 
 A headless checkout backend for LINE mini apps and native apps.
 
@@ -11,7 +11,25 @@ The Shopify and Wix checkouts cannot be embedded inside an app; sending the buye
 - Product, order and fulfillment management screens included
 - Hono for the API, Postgres for storage, Stripe Hosted Checkout for payments
 
-The bundled React storefront is one reference client; you do not need it if you only sell through your own app. The iOS (Swift) and LINE LIFF examples are in sections 4 and 5 of [docs/API.md](docs/API.md) (Chinese).
+The bundled React storefront is one reference client; you do not need it if you only sell through your own app. The iOS (Swift) and LINE LIFF examples are in sections 4 and 5 of the [API reference](docs/API.en.md).
+
+```bash
+npm install && npm run dev
+```
+
+That runs with no environment variables at all — in-memory database, demo payments — so opening `http://localhost:5173` walks you through a whole order in a couple of minutes.
+
+## What it does not do
+
+Worth knowing up front; this is where you find out it does not fit.
+
+- **Japanese yen only.** `currency` is fixed to `jpy`. Another currency means changing the schema.
+- **No tax breakdown.** A price is a single tax-inclusive integer. Because no rate or tax amount is stored, it **cannot issue a Japanese qualified invoice (適格請求書)**. Implement that yourself if you sell B2B.
+- **One product per order.** There is no cart. Quantity is 1–5. Bundling several products needs a line-item table.
+- **No refund or cancellation API.** Do those in the Stripe dashboard.
+- **No subscriptions.** One-off payments only.
+- **No LINE Messaging API code.** The scope ends at storing `externalUserId`; sending the notification is yours to write against your own LINE official account.
+- **MCP uses a fixed token.** No OAuth 2.1.
 
 ## Run locally
 
@@ -134,7 +152,7 @@ Eight tools are exposed: sales summary, order list, order lookup by email, order
 
 Buyer details are redacted by default: family name, a masked email address, and the prefecture. Set `MCP_ALLOW_PII=true` when the AI genuinely needs full shipping details, knowing that addresses and phone numbers then enter the AI vendor's context and logs.
 
-The protocol details and the full tool reference are in section 11 of [docs/API.md](docs/API.md) (Chinese).
+The protocol details and the full tool reference are in section 11 of the [API reference](docs/API.en.md).
 
 ## Vercel / Netlify
 
