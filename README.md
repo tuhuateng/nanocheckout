@@ -2,9 +2,16 @@
 
 **日本語** | [简体中文](README.zh-CN.md) | [English](README.en.md)
 
-小さなストア向けの、プラットフォーム非依存なチェックアウト実装です。フロントエンドは React + Vite、API は Hono、データベースは Postgres、決済は Stripe Checkout を使用します。
+LINE ミニアプリやネイティブアプリに決済を組み込むための、ヘッドレスなチェックアウト基盤です。
 
-Web、iOS、Android、LINE LIFF 向けのリクエスト例を含む完全な仕様は [API ドキュメント](docs/API.md)（中国語）を参照してください。
+Shopify や Wix の決済画面はアプリの中に埋め込めません。ユーザーを外部ブラウザへ送り出した時点で購入体験が途切れます。Nano Checkout が返すのは注文 ID と Stripe の決済 URL だけなので、LINE LIFF からでも iOS / Android アプリからでも、自分の画面のまま注文を作れます。物理的な商品の販売にアプリ内課金は不要なため、アプリでも自前の決済導線を持てます。
+
+- 注文に LINE ユーザー ID やアプリの利用者 ID を紐づけられるので、発送通知をメールではなく LINE やプッシュで届けられます
+- 日本向け: 円建て、都道府県の住所フォーム、特定商取引法に基づく表記ページを同梱
+- 商品管理・受注管理・発送管理の画面つき
+- API は Hono、データベースは Postgres、決済は Stripe Hosted Checkout
+
+同梱の React 製ストアフロントは参照実装のひとつです。自分のアプリだけで使う場合は不要です。iOS（Swift）と LINE LIFF の実装例は [API ドキュメント](docs/API.md)（中国語）の第 4 章と第 5 章にあります。
 
 ## ローカルで起動
 
@@ -35,7 +42,7 @@ npm run dev
 - `DATABASE_URL` — Cloudflare Hyperdrive を使う場合は不要。
 - `MCP_TOKEN` — 任意。設定すると AI 連携用の MCP エンドポイントが有効になります。`openssl rand -hex 32` で生成（32 文字以上）。
 
-テーブルは `migrations/` 内の SQL を番号順（`0000_checkout_orders.sql` → `0001_checkout_products.sql` → `0002_order_fulfillment.sql`）に SQL エディタで実行するか、`DIRECT_URL` を指定して `npm run db:push` で作成します。
+テーブルは `migrations/` 内の SQL を番号順（`0000_checkout_orders.sql` → `0001_checkout_products.sql` → `0002_order_fulfillment.sql` → `0003_order_external_user.sql`）に SQL エディタで実行するか、`DIRECT_URL` を指定して `npm run db:push` で作成します。
 
 ## Cloudflare Pages + Hyperdrive（推奨）
 

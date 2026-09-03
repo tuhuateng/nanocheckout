@@ -140,6 +140,26 @@ describe('mcp endpoint', () => {
     expect(JSON.stringify(order)).not.toContain(buyer.addressLine1);
   });
 
+  it('hides the LINE or app user id unless the store opts in', async () => {
+    const lineUserId = 'U4af4980629a0f1d1a8b2c3d4e5f60718';
+    const body = JSON.stringify({ ...buyer, externalUserId: lineUserId });
+    const post = (app: ReturnType<typeof createCheckoutApp>) => app.request('/api/orders', {
+      method: 'POST',
+      headers: { 'content-type': 'application/json', 'idempotency-key': crypto.randomUUID() },
+      body,
+    });
+
+    const redacted = setup();
+    await post(redacted.app);
+    const hidden = await redacted.callTool('list_orders');
+    expect(hidden.result.content[0].text).not.toContain(lineUserId);
+
+    const opened = setup({ allowPii: true });
+    await post(opened.app);
+    const shown = await opened.callTool('list_orders');
+    expect(JSON.parse(shown.result.content[0].text)[0].externalUserId).toBe(lineUserId);
+  });
+
   it('returns full buyer details once the store opts in', async () => {
     const { callTool, placeOrder } = setup({ allowPii: true });
     await placeOrder();

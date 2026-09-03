@@ -2,9 +2,16 @@
 
 [日本語](README.md) | **简体中文** | [English](README.en.md)
 
-面向小型店铺的、与部署平台无关的结账实现。前端使用 React + Vite，API 使用 Hono，数据库使用 Postgres，支付使用 Stripe Checkout。
+给 LINE 小程序和原生 App 用的 headless 结账后端。
 
-包含 Web、iOS、Android 和 LINE LIFF 请求示例的完整接口规范见 [API 接口文档](docs/API.md)。
+Shopify、Wix 的收银台没法嵌进 App 里，把用户踢到外部浏览器，购买流程当场就断了。Nano Checkout 只返回订单 ID 和 Stripe 支付链接，所以在 LINE LIFF 里、在 iOS / Android App 里，都能不离开自己的界面完成下单。卖实物商品不需要走应用内购买，App 完全可以用自己的支付通道。
+
+- 订单可以绑定 LINE 用户 ID 或 App 的用户标识，发货通知走 LINE 或推送，而不是发邮件
+- 面向日本市场：日元计价、都道府县地址表单、内置特定商取引法表记页面
+- 自带商品管理、订单管理和发货管理界面
+- API 用 Hono，数据库 Postgres，支付走 Stripe Hosted Checkout
+
+仓库里那套 React 前台只是参考实现之一，只在自己 App 里用的话可以不要。iOS（Swift）和 LINE LIFF 的接入示例见 [API 接口文档](docs/API.md) 第 4 章和第 5 章。
 
 ## 本地运行
 
@@ -35,7 +42,7 @@ npm run dev
 - `DATABASE_URL` — 使用 Cloudflare Hyperdrive 时不需要。
 - `MCP_TOKEN` — 可选。设置后启用给 AI 用的 MCP 接口，用 `openssl rand -hex 32` 生成（至少 32 个字符）。
 
-建表方式二选一：在 SQL 编辑器中按编号顺序执行 `migrations/` 下的 SQL（`0000_checkout_orders.sql` → `0001_checkout_products.sql` → `0002_order_fulfillment.sql`），或设置 `DIRECT_URL` 后运行 `npm run db:push`。
+建表方式二选一：在 SQL 编辑器中按编号顺序执行 `migrations/` 下的 SQL（`0000_checkout_orders.sql` → `0001_checkout_products.sql` → `0002_order_fulfillment.sql` → `0003_order_external_user.sql`），或设置 `DIRECT_URL` 后运行 `npm run db:push`。
 
 ## Cloudflare Pages + Hyperdrive（推荐）
 

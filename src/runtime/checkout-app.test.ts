@@ -232,6 +232,36 @@ describe('checkout app', () => {
     await expect(database.getProductBySku(product.sku)).resolves.toMatchObject({ inventory: 5 });
   });
 
+  it('keeps the LINE or app user id with the order for later notifications', async () => {
+    const adminPassword = 'admin-channel-password';
+    const { app } = setup({ adminPasswordHash: await hashAdminPassword(adminPassword, 100_000) });
+    const lineUserId = 'U4af4980629a0f1d1a8b2c3d4e5f60718';
+    const created = await app.request('/api/orders', {
+      method: 'POST',
+      headers: { 'content-type': 'application/json', 'idempotency-key': crypto.randomUUID() },
+      body: JSON.stringify({ ...validOrder, externalUserId: lineUserId }),
+    });
+    expect(created.status).toBe(201);
+    const { orderId } = await created.json() as { orderId: string };
+
+    const cookie = await loginAsAdmin(app, adminPassword);
+    const detail = await app.request(`/api/admin/orders/${orderId}`, { headers: { cookie } });
+    await expect(detail.json()).resolves.toMatchObject({ order: { externalUserId: lineUserId } });
+
+    const exported = await app.request('/api/admin/orders.csv', { headers: { cookie } });
+    expect(await exported.text()).toContain(lineUserId);
+  });
+
+  it('accepts an order without any external user id', async () => {
+    const { app } = setup();
+    const response = await app.request('/api/orders', {
+      method: 'POST',
+      headers: { 'content-type': 'application/json', 'idempotency-key': crypto.randomUUID() },
+      body: JSON.stringify(validOrder),
+    });
+    expect(response.status).toBe(201);
+  });
+
   it('refuses checkout when the catalog has no published product', async () => {
     const { app, createCheckoutSession } = setup({ db: new MemoryCheckoutDatabase() });
     const response = await app.request('/api/orders', {

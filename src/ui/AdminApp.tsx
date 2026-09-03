@@ -40,6 +40,7 @@ type AdminOrder = {
   currency: string;
   shippedAt: string | null;
   trackingNumber: string | null;
+  externalUserId: string | null;
   createdAt: string;
   updatedAt: string;
   buyer: {
@@ -435,7 +436,7 @@ function OrderDrawer({ order, close, updated }: { order: AdminOrder; close: () =
     <header><div><p className="admin-kicker">Order detail</p><h2>#{order.id.slice(0, 8).toUpperCase()}</h2></div><button aria-label="閉じる" onClick={close}><X size={20} /></button></header>
     <div className="drawer-status"><StatusBadge status={order.status} /><span>{new Intl.DateTimeFormat('ja-JP', { dateStyle: 'long', timeStyle: 'short' }).format(new Date(order.createdAt))}</span></div>
     <section><h3>商品</h3><div className="drawer-product"><div className="drawer-product-icon"><ShoppingBag size={19} /></div><div><strong>{order.productName}</strong><span>数量 {order.quantity}</span></div><strong>{formatYen(order.totalAmount)}</strong></div></section>
-    <section><h3>お客様</h3><dl><div><dt>お名前</dt><dd>{order.buyer.familyName} {order.buyer.givenName}</dd></div><div><dt>メール</dt><dd><a href={`mailto:${order.buyer.email}`}>{order.buyer.email}</a></dd></div><div><dt>電話番号</dt><dd>{order.buyer.phone}</dd></div></dl></section>
+    <section><h3>お客様</h3><dl><div><dt>お名前</dt><dd>{order.buyer.familyName} {order.buyer.givenName}</dd></div><div><dt>メール</dt><dd><a href={`mailto:${order.buyer.email}`}>{order.buyer.email}</a></dd></div><div><dt>電話番号</dt><dd>{order.buyer.phone}</dd></div>{order.externalUserId && <div><dt>外部ユーザーID</dt><dd><code className="external-user-id">{order.externalUserId}</code></dd></div>}</dl></section>
     <section><h3>お届け先</h3><p className="drawer-address">{address}</p></section>
     <section className="drawer-fulfillment">
       <h3>発送</h3>

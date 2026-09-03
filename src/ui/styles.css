@@ -277,3 +277,4 @@ footer nav a { text-underline-offset: 3px; }
   .orders-tools { width: 100%; }
   .export-button { flex: 0 0 auto; }
 }
+.external-user-id { display: inline-block; max-width: 100%; overflow: hidden; color: #4c524c; background: #eceee9; padding: 2px 6px; font-size: 8px; text-overflow: ellipsis; vertical-align: middle; }

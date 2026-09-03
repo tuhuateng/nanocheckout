@@ -167,6 +167,7 @@ Idempotency-Key: 550e8400-e29b-41d4-a716-446655440000
 | `addressLine1` | string | 是 | 街道门牌，1–120 字符 |
 | `addressLine2` | string | 否 | 建筑名、房间号，最多 120 字符，默认空字符串 |
 | `phone` | string | 是 | 8–30 字符 |
+| `externalUserId` | string | 否 | 1–128 字符。LINE 用户 ID 或 App 自己的用户标识，用于发货时推送通知 |
 
 请求示例：
 
@@ -182,9 +183,14 @@ Idempotency-Key: 550e8400-e29b-41d4-a716-446655440000
   "city": "渋谷区神宮前",
   "addressLine1": "1-2-3",
   "addressLine2": "KINUビル 201",
-  "phone": "090-1234-5678"
+  "phone": "090-1234-5678",
+  "externalUserId": "U4af4980629a0f1d1a8b2c3d4e5f60718"
 }
 ```
+
+`externalUserId` 是把订单和你自己的用户体系关联起来的字段。LINE 小程序传 `liff.getProfile()` 拿到的 `userId`，App 传自己的用户 ID。发货时凭它通过 LINE Messaging API 或推送通知联系买家，而不必依赖邮件——日本用户的邮件打开率远低于 LINE。不传则为 `null`，不影响下单。
+
+该字段以明文存储在 `external_user_id` 列并建有索引，因为需要按它反查订单。它不随其他购买者信息一起加密。
 
 响应 `201`：
 
@@ -329,7 +335,13 @@ func startCheckout(_ input: CheckoutRequest) async throws {
 
 ## 5. LINE LIFF / Web 接入示例
 
+在 LIFF 里下单时，把 LINE 的 `userId` 一起提交，订单就和这个 LINE 用户绑定了，发货时可以直接推消息给他。
+
 ```js
+await liff.init({ liffId: 'YOUR_LIFF_ID' });
+if (!liff.isLoggedIn()) liff.login();
+
+const profile = await liff.getProfile();
 const operationId = crypto.randomUUID();
 
 const response = await fetch('/api/orders', {
@@ -338,13 +350,17 @@ const response = await fetch('/api/orders', {
     'content-type': 'application/json',
     'idempotency-key': operationId,
   },
-  body: JSON.stringify(checkoutForm),
+  body: JSON.stringify({ ...checkoutForm, externalUserId: profile.userId }),
 });
 
 const result = await response.json();
 if (!response.ok) throw new Error(result.error || 'Checkout failed');
 location.assign(result.checkoutUrl);
 ```
+
+支付完成后 Stripe 会跳回 `${APP_URL}/success`。在 LIFF 里可以让这个页面调用 `liff.closeWindow()` 关掉 webview 回到聊天窗口。
+
+发货环节：后台把订单标记为已发货后，用订单里的 `externalUserId` 调 LINE Messaging API 的 push message 通知买家。本仓库不含 Messaging API 的调用代码，Channel Access Token 属于你自己的 LINE 官方账号，按需接入即可。
 
 当前服务默认按同源部署设计，没有开放任意来源 CORS。若 LIFF 页面与 API 不在同一域名，应通过同源代理访问，或在服务端增加严格的来源白名单；不要使用 `*` 开放管理员接口。
 
@@ -504,6 +520,7 @@ GET /api/admin/orders?status=paid&limit=50&q=buyer@example.com
       "productName": "Everyday Carry Tray",
       "shippedAt": "2026-09-02T11:20:00.000Z",
       "trackingNumber": "YAMATO-8899-0011",
+      "externalUserId": "U4af4980629a0f1d1a8b2c3d4e5f60718",
       "createdAt": "2026-09-02T10:02:57.765Z",
       "updatedAt": "2026-09-02T10:03:10.000Z",
       "buyer": {
@@ -578,7 +595,7 @@ GET /api/admin/orders.csv?status=paid&limit=1000
 
 参数与订单列表一致，`limit` 默认 1000，上限 5000。响应为 `text/csv; charset=utf-8`，带 UTF-8 BOM 以便 Excel 正确识别日文，并通过 `Content-Disposition` 提示下载。
 
-列依次为：注文ID、ステータス、発送日時、追跡番号、注文日時、商品名、数量、合計金額、通貨、お名前、メール、電話番号、郵便番号、都道府県、市区町村、番地、建物名。
+列依次为：注文ID、ステータス、発送日時、追跡番号、外部ユーザーID、注文日時、商品名、数量、合計金額、通貨、お名前、メール、電話番号、郵便番号、都道府県、市区町村、番地、建物名。
 
 所有字段都会加引号，且以 `=`、`+`、`-`、`@` 开头的值会被加上前导单引号，避免电子表格把它当作公式执行。该文件包含解密后的个人信息，请按内部规定保管。
 
@@ -686,6 +703,7 @@ Content-Type: application/json
 - Stripe Secret Key、Webhook Secret、数据库连接和 PII 密钥只能保存在服务端环境变量中。
 - 商品价格、运费和库存由服务端决定；客户端只提交 SKU 和数量。
 - 购买者信息在数据库中使用 AES-256-GCM 加密，邮箱检索值使用 HMAC-SHA256。
+- `externalUserId` 为便于反查以明文存储。它本身是可定位到个人的标识，导出和访问按个人信息对待。
 - 创建订单不需要登录，正式业务应在 Cloudflare 上按 IP 或业务身份增加速率限制和风控规则。
 - 管理员接口包含解密后的个人信息，不要从消费者 App 调用，也不要向任意来源开放 CORS。
 - `checkoutUrl` 是短期支付入口，客户端不应缓存或共享。
@@ -736,7 +754,7 @@ Content-Type: application/json
 
 ### 11.3 个人信息
 
-订单类工具默认对购买者信息脱敏，只返回姓氏、掩码邮箱和都道府县，并附带 `piiRedacted: true`：
+订单类工具默认对购买者信息脱敏，只返回姓氏、掩码邮箱和都道府县，并附带 `piiRedacted: true`。`externalUserId` 同样被隐去——LINE 用户 ID 与住址一样可以定位到具体的人：
 
 ```json
 {

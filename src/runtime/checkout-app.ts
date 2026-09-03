@@ -21,6 +21,7 @@ const checkoutSchema = z.object({
   phone: z.string().trim().min(8).max(30),
   quantity: z.number().int().min(1).max(5),
   sku: z.string().trim().min(2).max(64).optional(),
+  externalUserId: z.string().trim().min(1).max(128).optional(),
 });
 
 export type CheckoutAppDependencies = {
@@ -151,6 +152,7 @@ export function createCheckoutApp(deps: CheckoutAppDependencies) {
         order.status,
         order.shippedAt ? new Date(order.shippedAt).toISOString() : '',
         order.trackingNumber || '',
+        order.externalUserId || '',
         new Date(order.createdAt).toISOString(),
         order.productName,
         String(order.quantity),
@@ -167,7 +169,7 @@ export function createCheckoutApp(deps: CheckoutAppDependencies) {
       ];
     }));
     const header = [
-      '注文ID', 'ステータス', '発送日時', '追跡番号', '注文日時', '商品名', '数量', '合計金額', '通貨',
+      '注文ID', 'ステータス', '発送日時', '追跡番号', '外部ユーザーID', '注文日時', '商品名', '数量', '合計金額', '通貨',
       'お名前', 'メール', '電話番号', '郵便番号', '都道府県', '市区町村', '番地', '建物名',
     ];
     const csv = [header, ...rows].map((row) => row.map(escapeCsv).join(',')).join('\r\n');
@@ -304,6 +306,7 @@ export function createCheckoutApp(deps: CheckoutAppDependencies) {
         currency: selectedProduct.currency,
         productId: selectedProduct.id,
         productName: selectedProduct.name,
+        externalUserId: input.externalUserId ?? null,
       });
       persistedOrderId = order.id;
 

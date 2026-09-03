@@ -40,6 +40,7 @@ export type PendingOrderInput = {
   currency: string;
   productId: string | null;
   productName: string;
+  externalUserId: string | null;
 };
 
 export type OrderRecord = {
@@ -59,6 +60,7 @@ export type AdminOrderRecord = OrderRecord & {
   productName: string;
   shippedAt: string | Date | null;
   trackingNumber: string | null;
+  externalUserId: string | null;
   createdAt: string | Date;
   updatedAt: string | Date;
 };

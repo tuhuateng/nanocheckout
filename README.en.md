@@ -2,9 +2,16 @@
 
 [日本語](README.md) | [简体中文](README.zh-CN.md) | **English**
 
-A platform-agnostic checkout for small stores. The frontend is React + Vite, the API is Hono, the database is Postgres, and payments run through Stripe Checkout.
+A headless checkout backend for LINE mini apps and native apps.
 
-The full API reference with request examples for Web, iOS, Android and LINE LIFF is in [docs/API.md](docs/API.md) (Chinese).
+The Shopify and Wix checkouts cannot be embedded inside an app; sending the buyer out to a browser breaks the purchase there and then. Nano Checkout returns nothing but an order id and a Stripe payment URL, so a LINE LIFF page or an iOS / Android app can create orders without leaving its own screens. Selling physical goods does not require in-app purchase, so an app can run its own payment flow.
+
+- Orders can carry a LINE user id or your app's own user id, so shipping notices go out over LINE or push instead of email
+- Built for Japan: yen pricing, prefecture address form, and the legal terms page required by the Act on Specified Commercial Transactions
+- Product, order and fulfillment management screens included
+- Hono for the API, Postgres for storage, Stripe Hosted Checkout for payments
+
+The bundled React storefront is one reference client; you do not need it if you only sell through your own app. The iOS (Swift) and LINE LIFF examples are in sections 4 and 5 of [docs/API.md](docs/API.md) (Chinese).
 
 ## Run locally
 
@@ -35,7 +42,7 @@ See `.env.example` and register the following as secrets on your platform. Never
 - `DATABASE_URL` — not needed when using Cloudflare Hyperdrive.
 - `MCP_TOKEN` — optional. Setting it enables the MCP endpoint for AI clients. Generate with `openssl rand -hex 32` (at least 32 characters).
 
-Create the tables either by running the SQL files in `migrations/` in numeric order (`0000_checkout_orders.sql` → `0001_checkout_products.sql` → `0002_order_fulfillment.sql`) in a SQL editor, or by setting `DIRECT_URL` and running `npm run db:push`.
+Create the tables either by running the SQL files in `migrations/` in numeric order (`0000_checkout_orders.sql` → `0001_checkout_products.sql` → `0002_order_fulfillment.sql` → `0003_order_external_user.sql`) in a SQL editor, or by setting `DIRECT_URL` and running `npm run db:push`.
 
 ## Cloudflare Pages + Hyperdrive (recommended)
 

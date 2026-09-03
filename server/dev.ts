@@ -37,12 +37,12 @@ const mcpToken = process.env.MCP_TOKEN || 'nano-mcp-demo-token-2026';
 
 if (!process.env.DATABASE_URL && database instanceof MemoryCheckoutDatabase) {
   const demoBuyers = [
-    ['佐藤', '美咲', 'misaki@example.com', '東京都', '渋谷区代官山町', '12-4', '150-0034', 'paid', 2],
-    ['鈴木', '健太', 'kenta@example.com', '神奈川県', '横浜市中区山下町', '88-1', '231-0023', 'pending', 1],
-    ['高橋', '陽子', 'yoko@example.com', '大阪府', '大阪市北区中之島', '3-2', '530-0005', 'paid', 1],
-    ['田中', '直樹', 'naoki@example.com', '京都府', '京都市中京区御池通', '6-8', '604-0000', 'cancelled', 3],
+    ['佐藤', '美咲', 'misaki@example.com', '東京都', '渋谷区代官山町', '12-4', '150-0034', 'paid', 2, 'U4af4980629a0f1d1a8b2c3d4e5f60718'],
+    ['鈴木', '健太', 'kenta@example.com', '神奈川県', '横浜市中区山下町', '88-1', '231-0023', 'pending', 1, null],
+    ['高橋', '陽子', 'yoko@example.com', '大阪府', '大阪市北区中之島', '3-2', '530-0005', 'paid', 1, 'U9b1c2d3e4f5061728394a5b6c7d8e9f0'],
+    ['田中', '直樹', 'naoki@example.com', '京都府', '京都市中京区御池通', '6-8', '604-0000', 'cancelled', 3, null],
   ] as const;
-  for (const [familyName, givenName, email, prefecture, city, addressLine1, postalCode, status, quantity] of demoBuyers) {
+  for (const [familyName, givenName, email, prefecture, city, addressLine1, postalCode, status, quantity, externalUserId] of demoBuyers) {
     const id = crypto.randomUUID();
     const buyer = { email, familyName, givenName, postalCode, prefecture, city, addressLine1, addressLine2: '', phone: '090-0000-0000', quantity };
     await database.createPendingOrder({
@@ -57,6 +57,7 @@ if (!process.env.DATABASE_URL && database instanceof MemoryCheckoutDatabase) {
       currency: orderSpec.product.currency,
       productId: defaultProduct.id,
       productName: defaultProduct.name,
+      externalUserId,
     });
     await database.attachPaymentSession(id, `cs_demo_${id}`);
     if (status !== 'pending') await database.transitionPaymentSession(`cs_demo_${id}`, status);

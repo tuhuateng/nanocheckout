@@ -213,8 +213,10 @@ async function toMcpOrder(order: AdminOrderRecord, deps: McpDependencies) {
   const buyer = await decryptPii<Record<string, string>>(order.encryptedPii, deps.piiKey);
   const { encryptedPii: _, ...safeOrder } = order;
   if (deps.allowPii) return { ...safeOrder, buyer };
+  // The LINE or app user id identifies a person just as well as the address does.
+  const { externalUserId: __, ...redacted } = safeOrder;
   return {
-    ...safeOrder,
+    ...redacted,
     buyer: {
       familyName: buyer.familyName,
       email: maskEmail(buyer.email || ''),

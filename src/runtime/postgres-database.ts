@@ -37,11 +37,11 @@ export class PostgresCheckoutDatabase implements CheckoutDatabase {
       const rows = await transaction<Array<{ id: string; status: OrderStatus; payment_session_id: string | null }>>`
         INSERT INTO checkout_orders (
           id, idempotency_key, email_lookup, pii_ciphertext, quantity,
-          unit_amount, shipping_amount, total_amount, currency, status, product_id, product_name
+          unit_amount, shipping_amount, total_amount, currency, status, product_id, product_name, external_user_id
         ) VALUES (
           ${input.id}, ${input.idempotencyKey}, ${input.emailLookup}, ${input.encryptedPii}, ${input.quantity},
           ${input.unitAmount}, ${input.shippingAmount}, ${input.totalAmount}, ${input.currency}, 'pending',
-          ${input.productId}, ${input.productName}
+          ${input.productId}, ${input.productName}, ${input.externalUserId}
         )
         RETURNING id, status, payment_session_id
       `;
@@ -79,7 +79,7 @@ export class PostgresCheckoutDatabase implements CheckoutDatabase {
   }
 
   private orderColumns() {
-    return this.sql`id, status, payment_session_id, pii_ciphertext, quantity, unit_amount, shipping_amount, total_amount, currency, product_id, product_name, shipped_at, tracking_number, created_at, updated_at`;
+    return this.sql`id, status, payment_session_id, pii_ciphertext, quantity, unit_amount, shipping_amount, total_amount, currency, product_id, product_name, external_user_id, shipped_at, tracking_number, created_at, updated_at`;
   }
 
   async listOrders(options: OrderQuery): Promise<AdminOrderRecord[]> {
@@ -205,6 +205,7 @@ function mapAdminOrder(row: Record<string, unknown>): AdminOrderRecord {
     productName: row.product_name ? String(row.product_name) : 'Product',
     shippedAt: (row.shipped_at as string | Date | null) ?? null,
     trackingNumber: row.tracking_number ? String(row.tracking_number) : null,
+    externalUserId: row.external_user_id ? String(row.external_user_id) : null,
     createdAt: row.created_at as string | Date,
     updatedAt: row.updated_at as string | Date,
   };

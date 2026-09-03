@@ -34,6 +34,7 @@ export class MemoryCheckoutDatabase implements CheckoutDatabase {
       currency: input.currency,
       productId: input.productId,
       productName: input.productName,
+      externalUserId: input.externalUserId,
       shippedAt: null,
       trackingNumber: null,
       createdAt: now,
