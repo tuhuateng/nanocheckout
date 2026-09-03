@@ -19,6 +19,10 @@ npm install && npm run dev
 
 That runs with no environment variables at all — in-memory database, demo payments — so opening `http://localhost:5173` walks you through a whole order in a couple of minutes.
 
+| Storefront (reference client) | Admin panel |
+| --- | --- |
+| [![Checkout page](docs/images/storefront.png)](docs/images/storefront.png) | [![Admin dashboard](docs/images/admin-dashboard.png)](docs/images/admin-dashboard.png) |
+
 ## What it does not do
 
 Worth knowing up front; this is where you find out it does not fit.
@@ -99,6 +103,10 @@ Shipping progress is recorded from the order detail drawer:
 - Export the order list as CSV, written with a UTF-8 BOM so Japanese text opens correctly in Excel.
 
 Buyer names are stored encrypted and cannot be queried in the database. The search box sends email addresses and order ids to the server and filters names within the loaded page.
+
+[![Order detail and fulfillment](docs/images/admin-order.png)](docs/images/admin-order.png)
+
+The order detail also shows the external user id handed over by LINE or your app. That is the id you notify on when the parcel goes out.
 
 ### Product management
 

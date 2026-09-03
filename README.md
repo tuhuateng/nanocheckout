@@ -19,6 +19,10 @@ npm install && npm run dev
 
 環境変数なしで起動します。メモリ DB とデモ決済で動くので、`http://localhost:5173` を開けば数分で注文の一連の流れを確認できます。
 
+| ストアフロント（参照実装） | 管理画面 |
+| --- | --- |
+| [![チェックアウト画面](docs/images/storefront.png)](docs/images/storefront.png) | [![管理画面のダッシュボード](docs/images/admin-dashboard.png)](docs/images/admin-dashboard.png) |
+
 ## 現時点でできないこと
 
 先に把握しておいてください。用途に合わない場合、ここで分かります。
@@ -99,6 +103,10 @@ npm run dev
 - 注文一覧を CSV で書き出せます。日本語が文字化けしないよう UTF-8 BOM 付きで出力します。
 
 購入者の氏名は暗号化して保存しているためデータベース側では検索できません。検索ボックスはメールアドレスと注文 ID をサーバーで検索し、氏名は読み込み済みの一覧に対して絞り込みます。
+
+[![注文詳細と発送管理](docs/images/admin-order.png)](docs/images/admin-order.png)
+
+注文詳細には、LINE やアプリから渡された外部ユーザー ID も表示されます。この ID を使って発送通知を送ります。
 
 ### 商品管理
 
