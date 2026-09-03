@@ -164,6 +164,8 @@ npm run cf:dev     # Cloudflare Pages ローカル実行
 
 ## ライセンス
 
-Apache License 2.0 で公開しています。Copyright 2026 株式会社MIIMOO。
+Apache License 2.0 で公開しています。Copyright 2026 [株式会社MIIMOO](https://miimoo.jp)。
 
 商用利用、改変、再配布ができます。配布する際は `LICENSE` と `NOTICE` を同梱し、変更した箇所を明示してください。本ライセンスは「MIIMOO」および「株式会社MIIMOO」の名称・商標の使用許諾を含みません。
+
+開発: [株式会社MIIMOO](https://miimoo.jp)

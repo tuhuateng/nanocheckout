@@ -164,6 +164,8 @@ npm run cf:dev     # 本地运行 Cloudflare Pages
 
 ## 许可证
 
-以 Apache License 2.0 开源，Copyright 2026 株式会社MIIMOO。
+以 Apache License 2.0 开源，Copyright 2026 [株式会社MIIMOO](https://miimoo.jp)。
 
 可以商用、修改、再分发。分发时请一并附上 `LICENSE` 和 `NOTICE`，并注明你所做的改动。本协议不授予「MIIMOO」「株式会社MIIMOO」名称与商标的使用权。
+
+开发者: [株式会社MIIMOO](https://miimoo.jp)

@@ -304,7 +304,7 @@ function CheckoutView() {
       <footer>
         <span>© 2026 {orderSpec.storeName}</span>
         <nav><a href="/confirm/">特定商取引法に基づく表記</a><a href={`mailto:${orderSpec.legal.contact}`}>お問い合わせ</a></nav>
-        <span className="powered">Checkout by <strong>Nano</strong></span>
+        <span className="powered">Powered by <a href="https://miimoo.jp" target="_blank" rel="noreferrer"><strong>miimoo</strong></a></span>
       </footer>
     </main>
   );
